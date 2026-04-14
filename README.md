@@ -1,6 +1,6 @@
 # Nova Sonus CYOA Editor
 
-An accessibility-first, in-browser authoring environment for Nova Sonus choose-your-own-adventure content. Authors — sighted and visually impaired — construct adventure structure and narrative against the canonical `CYOA_Schema.json` in a single integrated tool. WCAG 2.2 Level AA conformance is a release gate.
+An accessibility-first, in-browser authoring environment for Nova Sonus choose-your-own-adventure content. Content creators, sighted and visually impaired, construct adventure structure and narrative against the canonical `CYOA_Schema.json` in a single integrated tool. WCAG 2.2 Level AA conformance is a release gate.
 
 Implements epic [OPS-517](https://novasonus.atlassian.net/browse/OPS-517).
 
