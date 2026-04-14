@@ -1,0 +1,69 @@
+[
+  {
+    "id": "zoo-001",
+    "title": "A Strange Day at the Zoo",
+    "node_type": "start",
+    "checkpoint": false,
+    "narrativeText": "The morning sun casts long shadows across the zoo's main path as you pass through the wrought-iron gates. An unusual energy hangs in the air — the animals seem restless, and the usually cheerful keeper by the entrance wears a worried expression. Before you can ask what is wrong, a distant crash echoes from the direction of the big cats enclosure, followed by an alarmed shout. Nearby, a small sign on the reptile house door reads: 'Temporary closure — snake count in progress.'",
+    "entry_foley": "zoo_gate_creak",
+    "music": "light_whimsy",
+    "sounds": "animal_calls_distant",
+    "choices": [
+      {
+        "choiceText": "Rush towards the big cats enclosure to investigate the crash",
+        "choiceResponseConstraint": "none",
+        "nextNode": "zoo-002"
+      },
+      {
+        "choiceText": "Slip into the reptile house to see what the snake count is about",
+        "choiceResponseConstraint": "none",
+        "nextNode": "zoo-003"
+      }
+    ]
+  },
+  {
+    "id": "zoo-002",
+    "title": "The Big Cats Enclosure",
+    "node_type": "scene_start",
+    "checkpoint": true,
+    "narrativeText": "You round the corner to find a young keeper pressed against the outer fence, eyes wide. A sleek leopard paces just inside the mesh, its amber gaze tracking every movement. The gate latch, you notice, has been left unclipped — an accident waiting to happen. The keeper mouths 'help' in your direction whilst trying not to make any sudden movements.",
+    "entry_foley": "leopard_growl_low",
+    "music": "tense_underscore",
+    "sounds": "wind_through_trees",
+    "choices": [
+      {
+        "choiceText": "Calmly clip the gate latch back into place and radio for the senior keeper",
+        "choiceResponseConstraint": "none",
+        "nextNode": "zoo-004"
+      }
+    ]
+  },
+  {
+    "id": "zoo-003",
+    "title": "The Reptile House",
+    "node_type": "scene_start",
+    "checkpoint": true,
+    "narrativeText": "Inside the dim reptile house, the humid air smells of earth and foliage. A keeper with a clipboard is muttering to herself and recounting the terrariums. 'One's definitely missing,' she says without looking up. 'A corn snake. Harmless, but the visitors mustn't know.' She gestures towards the café annexe, where a low rustling can be heard from behind the counter.",
+    "entry_foley": "reptile_house_hum",
+    "music": "light_whimsy",
+    "sounds": "vivarium_bubbles",
+    "choices": [
+      {
+        "choiceText": "Slip into the café and carefully retrieve the escaped corn snake",
+        "choiceResponseConstraint": "none",
+        "nextNode": "zoo-004"
+      }
+    ]
+  },
+  {
+    "id": "zoo-004",
+    "title": "A Hero's Welcome",
+    "node_type": "adventure_success",
+    "checkpoint": false,
+    "narrativeText": "With the situation resolved, the head keeper shakes your hand warmly. 'You've got a cool head in a crisis,' she says. 'Most visitors would have run a mile.' The zoo's PA system crackles into life with cheerful music, the animals settle, and the gates are reopened to a gathering queue of schoolchildren. It has been a strange day — but a very good one.",
+    "entry_foley": "applause_small",
+    "music": "triumphant_fanfare_short",
+    "sounds": "zoo_ambience_cheerful",
+    "choices": []
+  }
+]
