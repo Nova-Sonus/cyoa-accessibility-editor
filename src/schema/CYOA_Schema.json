@@ -1,0 +1,105 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Fighting Fantasy Adventure Story Data",
+    "description": "Schema for defining interactive choose-your-own-adventure story nodes",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": [
+            "id",
+            "title",
+            "node_type",
+            "narrativeText",
+            "choices"
+        ],
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "Unique identifier for the story node"
+            },
+            "title": {
+                "type": "string",
+                "description": "Title displayed at the top of the story node"
+            },
+            "node_type": {
+                "type": "string",
+                "description": "Type of story node governing logic or display",
+                "enum": [
+                    "start",
+                    "decision",
+                    "scene_start",
+                    "end",
+                    "adventure_success",
+                    "narrative",
+                    "combat",
+                    "puzzle"
+                ]
+            },
+            "checkpoint": {
+                "type": "boolean",
+                "description": "If true, this node is an explicit checkpoint. The player's visit is persisted and offered as a return point when an end node is reached.",
+                "default": false
+            },
+            "narrativeText": {
+                "type": "string",
+                "description": "Main descriptive text for the story node"
+            },
+            "entry_foley": {
+                "type": "string",
+                "description": "Sound effect played when entering this node (or 'none')"
+            },
+            "music": {
+                "type": "string",
+                "description": "Background music track for this node (or 'none')"
+            },
+            "sounds": {
+                "type": "string",
+                "description": "Ambient sound effects for this node (or 'none')"
+            },
+            "activities": {
+                "type": "array",
+                "description": "List of activities or challenges in this node",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "choices": {
+                "type": "array",
+                "description": "Available choices for the player in this node",
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "choiceText",
+                        "choiceResponseConstraint",
+                        "nextNode"
+                    ],
+                    "properties": {
+                        "choiceText": {
+                            "type": "string"
+                        },
+                        "choiceResponseConstraint": {
+                            "type": "string"
+                        },
+                        "nextNode": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "if": {
+            "properties": {
+                "node_type": {
+                    "enum": ["end", "adventure_success"]
+                }
+            }
+        },
+        "then": {
+            "properties": {
+                "choices": {
+                    "maxItems": 0
+                }
+            }
+        }
+    }
+}
