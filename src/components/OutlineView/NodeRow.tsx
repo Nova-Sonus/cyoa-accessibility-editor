@@ -74,6 +74,8 @@ export function NodeRow({
   const entryFoleyId = `${baseId}-entry-foley`
   const musicId = `${baseId}-music`
   const soundsId = `${baseId}-sounds`
+  const checkpointId = `${baseId}-checkpoint`
+  const activitiesGroupId = `${baseId}-activities`
   const noChoicesHintId = `${baseId}-no-choices-hint`
 
   // Local draft state — committed to store on blur / change.
@@ -82,6 +84,19 @@ export function NodeRow({
   const [entryFoleyDraft, setEntryFoleyDraft] = useState(node.entry_foley ?? '')
   const [musicDraft, setMusicDraft] = useState(node.music ?? '')
   const [soundsDraft, setSoundsDraft] = useState(node.sounds ?? '')
+
+  // Activities draft — array of strings committed to store on blur or on structural edits.
+  // activitiesDraftRef is kept in sync with the state so that blur handlers always
+  // read the latest value even when blur fires synchronously before the next render
+  // (e.g., focus moving away during a keyboard reorder).
+  const [activitiesDraft, setActivitiesDraftState] = useState<string[]>(node.activities ?? [])
+  const activitiesDraftRef = useRef<string[]>(activitiesDraft)
+  const activityRefs = useRef<Array<HTMLInputElement | null>>([])
+
+  const setActivitiesDraft = useCallback((next: string[]) => {
+    activitiesDraftRef.current = next
+    setActivitiesDraftState(next)
+  }, [])
 
   // Sync drafts when the node changes from outside (e.g. adventure loaded).
   useEffect(() => {
@@ -103,6 +118,83 @@ export function NodeRow({
   useEffect(() => {
     setSoundsDraft(node.sounds ?? '')
   }, [node.sounds])
+
+  useEffect(() => {
+    const fromStore = node.activities ?? []
+    activitiesDraftRef.current = fromStore
+    setActivitiesDraftState(fromStore)
+  }, [node.activities])
+
+  // Commit the activities array to the store if it differs from the document.
+  const commitActivities = useCallback(
+    (activities: string[]) => {
+      const storeValue = node.activities ?? []
+      if (JSON.stringify(activities) !== JSON.stringify(storeValue)) {
+        updateNode(node.id, {
+          activities: activities.length > 0 ? activities : undefined,
+        })
+      }
+    },
+    [node.id, node.activities, updateNode],
+  )
+
+  const handleActivityChange = useCallback((index: number, value: string) => {
+    const next = activitiesDraftRef.current.map((a, i) => (i === index ? value : a))
+    setActivitiesDraft(next)
+  }, [setActivitiesDraft])
+
+  const handleActivityBlur = useCallback(() => {
+    commitActivities(activitiesDraftRef.current)
+  }, [commitActivities])
+
+  const handleAddActivity = useCallback(() => {
+    const next = [...activitiesDraftRef.current, '']
+    setActivitiesDraft(next)
+    // Defer focus to the new input until after render.
+    requestAnimationFrame(() => {
+      activityRefs.current[next.length - 1]?.focus()
+    })
+  }, [setActivitiesDraft])
+
+  const handleRemoveActivity = useCallback(
+    (index: number) => {
+      const next = activitiesDraftRef.current.filter((_, i) => i !== index)
+      setActivitiesDraft(next)
+      commitActivities(next)
+    },
+    [setActivitiesDraft, commitActivities],
+  )
+
+  const handleActivityKeyDown = useCallback(
+    (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!e.altKey) return
+      const current = activitiesDraftRef.current
+      if (e.key === 'ArrowUp' && index > 0) {
+        e.preventDefault()
+        const next = [...current]
+        ;[next[index - 1]!, next[index]!] = [next[index]!, next[index - 1]!]
+        setActivitiesDraft(next)
+        commitActivities(next)
+        activityRefs.current[index - 1]?.focus()
+      } else if (e.key === 'ArrowDown' && index < current.length - 1) {
+        e.preventDefault()
+        const next = [...current]
+        ;[next[index + 1]!, next[index]!] = [next[index]!, next[index + 1]!]
+        setActivitiesDraft(next)
+        commitActivities(next)
+        activityRefs.current[index + 1]?.focus()
+      }
+    },
+    [setActivitiesDraft, commitActivities],
+  )
+
+  const handleCheckpointChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      updateNode(node.id, { checkpoint: e.target.checked })
+      onAnnounce(e.target.checked ? 'Checkpoint enabled.' : 'Checkpoint disabled.')
+    },
+    [node.id, updateNode, onAnnounce],
+  )
 
   // Focus management — open the row and focus the title input when requested.
   useEffect(() => {
@@ -246,6 +338,49 @@ export function NodeRow({
               onBlur={handleSoundsBlur}
             />
           </div>
+
+          <div>
+            <input
+              id={checkpointId}
+              type="checkbox"
+              checked={node.checkpoint ?? false}
+              onChange={handleCheckpointChange}
+            />
+            <label htmlFor={checkpointId}>Checkpoint</label>
+          </div>
+
+          <fieldset>
+            <legend id={activitiesGroupId}>Activities</legend>
+            {activitiesDraft.length > 0 && (
+              <ul>
+                {activitiesDraft.map((activity, i) => (
+                  <li key={i}>
+                    <label htmlFor={`${activitiesGroupId}-${i}`}>Activity {i + 1}</label>
+                    <input
+                      id={`${activitiesGroupId}-${i}`}
+                      type="text"
+                      value={activity}
+                      onChange={(e) => handleActivityChange(i, e.target.value)}
+                      onBlur={handleActivityBlur}
+                      onKeyDown={(e) => handleActivityKeyDown(i, e)}
+                      ref={(el) => {
+                        activityRefs.current[i] = el
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveActivity(i)}
+                    >
+                      Remove activity {i + 1}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" onClick={handleAddActivity}>
+              Add activity
+            </button>
+          </fieldset>
 
           {/*
            * Terminal nodes (end, adventure_success) cannot have choices.

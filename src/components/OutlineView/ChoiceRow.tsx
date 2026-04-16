@@ -52,21 +52,33 @@ export function ChoiceRow({
 
   const baseId = useId()
   const choiceTextId = `${baseId}-choice-text`
+  const constraintId = `${baseId}-constraint`
   const nextNodeId = `${baseId}-next-node`
   const danglingHintId = `${baseId}-dangling`
 
   const [choiceTextDraft, setChoiceTextDraft] = useState(choice.choiceText)
+  const [constraintDraft, setConstraintDraft] = useState(choice.choiceResponseConstraint)
 
-  // Sync draft if the choice changes from outside (e.g. undo or store reload).
+  // Sync drafts if the choice changes from outside (e.g. undo or store reload).
   useEffect(() => {
     setChoiceTextDraft(choice.choiceText)
   }, [choice.choiceText])
+
+  useEffect(() => {
+    setConstraintDraft(choice.choiceResponseConstraint)
+  }, [choice.choiceResponseConstraint])
 
   const handleChoiceTextBlur = useCallback(() => {
     if (choiceTextDraft !== choice.choiceText) {
       updateChoice(nodeId, choiceIndex, { choiceText: choiceTextDraft })
     }
   }, [choiceTextDraft, choice.choiceText, nodeId, choiceIndex, updateChoice])
+
+  const handleConstraintBlur = useCallback(() => {
+    if (constraintDraft !== choice.choiceResponseConstraint) {
+      updateChoice(nodeId, choiceIndex, { choiceResponseConstraint: constraintDraft })
+    }
+  }, [constraintDraft, choice.choiceResponseConstraint, nodeId, choiceIndex, updateChoice])
 
   const handleNextNodeChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -100,6 +112,17 @@ export function ChoiceRow({
           value={choiceTextDraft}
           onChange={(e) => setChoiceTextDraft(e.target.value)}
           onBlur={handleChoiceTextBlur}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={constraintId}>Response constraint</label>
+        <input
+          id={constraintId}
+          type="text"
+          value={constraintDraft}
+          onChange={(e) => setConstraintDraft(e.target.value)}
+          onBlur={handleConstraintBlur}
         />
       </div>
 

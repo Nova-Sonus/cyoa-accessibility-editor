@@ -1005,3 +1005,347 @@ describe('OutlineView — asset manifest panel', () => {
     expect(results).toHaveNoViolations()
   })
 })
+
+// ---------------------------------------------------------------------------
+// OPS-533: choiceResponseConstraint field
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — choice editing: choiceResponseConstraint field', () => {
+  it('renders the Response constraint field for each choice', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByLabelText('Response constraint')).toBeTruthy()
+  })
+
+  it('pre-populates the constraint field from the document', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', {
+        choices: [{ choiceText: 'Go', choiceResponseConstraint: 'strength >= 10', nextNode: 'n2' }],
+      }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Response constraint') as HTMLInputElement).value).toBe('strength >= 10')
+  })
+
+  it('commits choiceResponseConstraint to the store on blur', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Response constraint'), { target: { value: 'dexterity > 5' } })
+    fireEvent.blur(screen.getByLabelText('Response constraint'))
+
+    expect(store.getState().document[0]?.choices[0]?.choiceResponseConstraint).toBe('dexterity > 5')
+  })
+
+  it('does not dispatch when choiceResponseConstraint is unchanged on blur', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', {
+        choices: [{ choiceText: 'Go', choiceResponseConstraint: 'strength >= 10', nextNode: 'n2' }],
+      }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.blur(screen.getByLabelText('Response constraint'))
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+
+  it('round-trips choiceResponseConstraint through save and load', async () => {
+    const repo = new (await import('../../repository/InMemoryRepository')).InMemoryRepository()
+    await repo.save('test', [
+      makeNode('n1', {
+        choices: [{ choiceText: 'Go', choiceResponseConstraint: 'level >= 3', nextNode: 'n2' }],
+      }),
+      makeNode('n2'),
+    ])
+    const store = createAdventureStore(repo)
+    await store.getState().loadAdventure('test')
+
+    await store.getState().saveAdventure()
+
+    const reloadedStore = createAdventureStore(repo)
+    await reloadedStore.getState().loadAdventure('test')
+
+    expect(reloadedStore.getState().document[0]?.choices[0]?.choiceResponseConstraint).toBe('level >= 3')
+  })
+
+  it('has no axe violations with the constraint field visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', {
+        choices: [{ choiceText: 'Go', choiceResponseConstraint: 'strength >= 10', nextNode: 'n2' }],
+      }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-533: checkpoint toggle
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — checkpoint toggle', () => {
+  it('renders the Checkpoint checkbox when a node is expanded', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByLabelText('Checkpoint')).toBeTruthy()
+  })
+
+  it('is unchecked by default when checkpoint is absent from the node', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Checkpoint') as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('is checked when checkpoint is true in the document', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Checkpoint') as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('commits checkpoint: true to the store when checked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByLabelText('Checkpoint'))
+
+    expect(store.getState().document[0]?.checkpoint).toBe(true)
+  })
+
+  it('commits checkpoint: false to the store when unchecked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByLabelText('Checkpoint'))
+
+    expect(store.getState().document[0]?.checkpoint).toBe(false)
+  })
+
+  it('classifier re-tags the node as isCheckpoint after enabling checkpoint', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(store.getState().classifierCache.get('n1')?.isCheckpoint).toBe(false)
+
+    fireEvent.click(screen.getByLabelText('Checkpoint'))
+
+    expect(store.getState().classifierCache.get('n1')?.isCheckpoint).toBe(true)
+  })
+
+  it('has no axe violations with the checkpoint checkbox visible', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
+    const { container } = renderOutline(store)
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-533: activities array editing
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — activities editor: render', () => {
+  it('renders the Activities fieldset when a node is expanded', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByRole('group', { name: 'Activities' })).toBeTruthy()
+  })
+
+  it('renders an "Add activity" button', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByRole('button', { name: 'Add activity' })).toBeTruthy()
+  })
+
+  it('renders existing activities from the document', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Activity 1') as HTMLInputElement).value).toBe('Roll dice')
+    expect((screen.getByLabelText('Activity 2') as HTMLInputElement).value).toBe('Pick lock')
+  })
+
+  it('shows no activity inputs when activities is absent', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.queryByLabelText('Activity 1')).toBeNull()
+  })
+})
+
+describe('OutlineView — activities editor: add and remove', () => {
+  it('adds a new activity input when "Add activity" is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }))
+
+    expect(screen.getByLabelText('Activity 1')).toBeTruthy()
+  })
+
+  it('commits new activity text to the store on blur', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }))
+    fireEvent.change(screen.getByLabelText('Activity 1'), { target: { value: 'Solve puzzle' } })
+    fireEvent.blur(screen.getByLabelText('Activity 1'))
+
+    expect(store.getState().document[0]?.activities).toEqual(['Solve puzzle'])
+  })
+
+  it('removes the activity from the store when "Remove activity" is clicked', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove activity 1' }))
+
+    expect(store.getState().document[0]?.activities).toEqual(['Pick lock'])
+  })
+
+  it('sets activities to undefined when the last entry is removed', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { activities: ['Roll dice'] })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove activity 1' }))
+
+    expect(store.getState().document[0]?.activities).toBeUndefined()
+  })
+})
+
+describe('OutlineView — activities editor: keyboard reorder', () => {
+  it('moves an activity up with Alt+ArrowUp', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['First', 'Second'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.keyDown(screen.getByLabelText('Activity 2'), {
+      key: 'ArrowUp',
+      altKey: true,
+    })
+
+    expect(store.getState().document[0]?.activities).toEqual(['Second', 'First'])
+  })
+
+  it('moves an activity down with Alt+ArrowDown', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['First', 'Second'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.keyDown(screen.getByLabelText('Activity 1'), {
+      key: 'ArrowDown',
+      altKey: true,
+    })
+
+    expect(store.getState().document[0]?.activities).toEqual(['Second', 'First'])
+  })
+
+  it('does not move the first activity up past the beginning', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['Only', 'Second'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.keyDown(screen.getByLabelText('Activity 1'), {
+      key: 'ArrowUp',
+      altKey: true,
+    })
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+
+  it('does not move the last activity down past the end', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['First', 'Last'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.keyDown(screen.getByLabelText('Activity 2'), {
+      key: 'ArrowDown',
+      altKey: true,
+    })
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+
+  it('ignores ArrowUp without Alt held', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['First', 'Second'] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.keyDown(screen.getByLabelText('Activity 2'), { key: 'ArrowUp' })
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+})
+
+describe('OutlineView — activities editor: accessibility', () => {
+  it('has no axe violations with activities visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
+    ])
+    const { container } = renderOutline(store)
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
