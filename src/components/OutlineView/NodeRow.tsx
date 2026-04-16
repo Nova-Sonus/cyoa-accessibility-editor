@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useId } from 'react'
+import { useState, useCallback, useEffect, useRef, useId } from 'react'
 import type { AdventureNode, NodeType } from '../../types/adventure'
 import { isTerminalNodeType } from '../../types/adventure'
 import { useAdventureStore } from '../../store/StoreContext'
+import { ChoiceRow } from './ChoiceRow'
 
 /**
  * All eight node_type values from CYOA_Schema.json, in schema-defined order.
@@ -27,6 +28,20 @@ export interface NodeRowProps {
    * choices.  The parent renders a corresponding entry in the issues panel.
    */
   onChoicesCleared: (nodeId: string, count: number) => void
+  /** Every node id in the document, for populating the nextNode select. */
+  allNodeIds: ReadonlyArray<string>
+  /**
+   * Called when the user creates a stub node via the nextNode combobox.
+   * The parent uses this to move focus to the new node's title field.
+   */
+  onNewNodeCreated: (newNodeId: string) => void
+  /**
+   * When true, opens the `<details>` and moves focus to the title input.
+   * Used to shift focus to a newly created stub node.
+   */
+  focusTitleOnMount?: boolean
+  /** Called after focus has been applied so the parent can clear the request. */
+  onFocusApplied?: () => void
 }
 
 /**
@@ -34,17 +49,29 @@ export interface NodeRowProps {
  *
  * Uses `<details>`/`<summary>` for native keyboard-accessible expand/collapse.
  * Draft state is held locally and committed to the store on blur (title,
- * narrativeText) or on change (node_type).  External updates to the node
- * are synced back to the draft via `useEffect`.
+ * narrativeText, choiceText) or on change (node_type, nextNode).
  */
-export function NodeRow({ node, onAnnounce, onChoicesCleared }: NodeRowProps) {
+export function NodeRow({
+  node,
+  onAnnounce,
+  onChoicesCleared,
+  allNodeIds,
+  onNewNodeCreated,
+  focusTitleOnMount,
+  onFocusApplied,
+}: NodeRowProps) {
   const updateNode = useAdventureStore((s) => s.updateNode)
+  const addChoice = useAdventureStore((s) => s.addChoice)
+
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   // useId produces a stable, unique prefix for all field ids in this row.
   const baseId = useId()
   const titleId = `${baseId}-title`
   const typeId = `${baseId}-type`
   const narrativeId = `${baseId}-narrative`
+  const noChoicesHintId = `${baseId}-no-choices-hint`
 
   // Local draft state — committed to store on blur / change.
   const [titleDraft, setTitleDraft] = useState(node.title)
@@ -58,6 +85,15 @@ export function NodeRow({ node, onAnnounce, onChoicesCleared }: NodeRowProps) {
   useEffect(() => {
     setNarrativeDraft(node.narrativeText)
   }, [node.narrativeText])
+
+  // Focus management — open the row and focus the title input when requested.
+  useEffect(() => {
+    if (focusTitleOnMount && detailsRef.current && titleInputRef.current) {
+      detailsRef.current.open = true
+      titleInputRef.current.focus()
+      onFocusApplied?.()
+    }
+  }, [focusTitleOnMount, onFocusApplied])
 
   const handleTitleBlur = useCallback(() => {
     const trimmed = titleDraft.trim()
@@ -92,11 +128,16 @@ export function NodeRow({ node, onAnnounce, onChoicesCleared }: NodeRowProps) {
     [node.id, node.choices.length, updateNode, onAnnounce, onChoicesCleared],
   )
 
+  const handleAddChoice = useCallback(() => {
+    addChoice(node.id, { choiceText: '', choiceResponseConstraint: '', nextNode: '' })
+    onAnnounce('Choice added.')
+  }, [node.id, addChoice, onAnnounce])
+
   const isTerminal = isTerminalNodeType(node.node_type)
 
   return (
     <li>
-      <details>
+      <details ref={detailsRef}>
         <summary>
           {node.title}
           {/* Parenthetical type is decorative — title alone is sufficient context. */}
@@ -107,6 +148,7 @@ export function NodeRow({ node, onAnnounce, onChoicesCleared }: NodeRowProps) {
           <div>
             <label htmlFor={titleId}>Title</label>
             <input
+              ref={titleInputRef}
               id={titleId}
               type="text"
               value={titleDraft}
@@ -137,24 +179,34 @@ export function NodeRow({ node, onAnnounce, onChoicesCleared }: NodeRowProps) {
           </div>
 
           {/*
-           * Choices section is hidden for terminal nodes (end, adventure_success).
-           * Schema if/then enforces an empty choices array on these types, and the
-           * store clears choices transactionally when node_type transitions.
-           * Full choice editing is implemented in OPS-530.
+           * Terminal nodes (end, adventure_success) cannot have choices.
+           * Show an accessible explanation rather than silently omitting the
+           * section, so authors understand why the editor is unavailable.
+           * The store enforces the invariant by clearing choices on terminal
+           * transition; the UI enforces it by hiding the add affordance.
            */}
-          {!isTerminal && (
-            <section aria-label={`Choices: ${node.choices.length}`}>
-              {node.choices.length === 0 ? (
-                <p>No choices yet.</p>
-              ) : (
+          {isTerminal ? (
+            <p id={noChoicesHintId}>Choices are not available for terminal nodes.</p>
+          ) : (
+            <section aria-label={`Choices for ${node.id}`}>
+              {node.choices.length > 0 && (
                 <ul>
                   {node.choices.map((c, i) => (
-                    <li key={i}>
-                      {c.choiceText} &rarr; {c.nextNode}
-                    </li>
+                    <ChoiceRow
+                      key={i}
+                      nodeId={node.id}
+                      choice={c}
+                      choiceIndex={i}
+                      allNodeIds={allNodeIds}
+                      onNewNodeCreated={onNewNodeCreated}
+                      onAnnounce={onAnnounce}
+                    />
                   ))}
                 </ul>
               )}
+              <button type="button" onClick={handleAddChoice}>
+                Add choice
+              </button>
             </section>
           )}
         </div>

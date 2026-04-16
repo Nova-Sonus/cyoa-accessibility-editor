@@ -90,6 +90,21 @@ export interface AdventureActions {
    * @throws {StoreActionError} NODE_NOT_FOUND if `nodeId` is absent.
    */
   deleteChoice(nodeId: string, choiceIndex: number): void
+
+  /**
+   * Atomically create a stub node and link it as the `nextNode` of the choice
+   * at `choiceIndex` on `nodeId`.
+   *
+   * The stub has `node_type: 'narrative'`, an empty `narrativeText`, and an
+   * empty `choices` array.  Its id is a UUID generated via `crypto.randomUUID`.
+   *
+   * Both the new node and the updated choice are written in a single
+   * `set()` call so the document is never transiently invalid.
+   *
+   * @returns The id of the newly created node.
+   * @throws {StoreActionError} NODE_NOT_FOUND if `nodeId` is absent.
+   */
+  createNodeAndLinkChoice(nodeId: string, choiceIndex: number): string
 }
 
 export type AdventureStoreState = AdventureState & AdventureActions
@@ -345,6 +360,42 @@ export function createAdventureStore(repository: AdventureRepository) {
             false,
             'deleteChoice',
           )
+        },
+
+        createNodeAndLinkChoice: (nodeId, choiceIndex) => {
+          const currentDocument = get().document
+          const idx = requireNodeIndex(currentDocument, nodeId)
+          const node = currentDocument[idx]!
+
+          const stubNode: AdventureNode = {
+            id: crypto.randomUUID(),
+            title: 'New node',
+            node_type: 'narrative',
+            narrativeText: '',
+            choices: [],
+          }
+
+          const updatedChoices = node.choices.map((c, i) =>
+            i === choiceIndex ? { ...c, nextNode: stubNode.id } : c,
+          )
+          const updatedNode: AdventureNode = { ...node, choices: updatedChoices }
+
+          const newDocument = [
+            ...currentDocument.slice(0, idx),
+            updatedNode,
+            ...currentDocument.slice(idx + 1),
+            stubNode,
+          ]
+          set(
+            {
+              document: newDocument,
+              classifierCache: updateClassifierCache(get().classifierCache, newDocument),
+            },
+            false,
+            'createNodeAndLinkChoice',
+          )
+
+          return stubNode.id
         },
       }),
       { name: 'adventure-store' },

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import { NodeRow } from './NodeRow'
 
@@ -27,15 +27,20 @@ const visuallyHiddenStyle: React.CSSProperties = {
 
 /**
  * Outline view — a keyboard-navigable, screen-reader-friendly list of all
- * adventure nodes.  MVP fields: `title`, `node_type`, `narrativeText`.
+ * adventure nodes.  Covers title, node_type, narrativeText, and full choice
+ * editing with a nextNode select that includes a "Create new node" affordance.
  *
  * Design decisions:
  * - Single `aria-live="polite" aria-atomic="true"` region prevents announcement
  *   storms when multiple fields change in quick succession.
  * - Semantic HTML only (`<ul>`, `<details>`, `<textarea>`, `<select>`,
  *   `<button>`, `<label>`) — no `role="application"`.
- * - Issues panel surfaces nodes where a terminal-type transition cleared
- *   pre-existing choices; this panel is extended in OPS-530.
+ * - Issues panel surfaces: (a) nodes where a terminal-type transition cleared
+ *   pre-existing choices, and (b) dangling nextNode references (computed
+ *   reactively from the live document — surfaced within one render cycle of
+ *   the causative mutation, satisfying the OPS-530 AC).
+ * - Focus management: when a stub node is created via the nextNode combobox,
+ *   OutlineView directs focus to that node's title field.
  */
 export function OutlineView() {
   const document = useAdventureStore((s) => s.document)
@@ -57,15 +62,15 @@ export function OutlineView() {
     }, 50)
   }, [])
 
-  // ---- Issues panel -------------------------------------------------------
-  const [issues, setIssues] = useState<IssueEntry[]>([])
+  // ---- Issues panel — terminal-transition events --------------------------
+  const [terminalIssues, setTerminalIssues] = useState<IssueEntry[]>([])
 
   const handleChoicesCleared = useCallback(
     (nodeId: string, count: number) => {
       // Find the node title from the *current* document snapshot.
       const node = document.find((n) => n.id === nodeId)
       const nodeTitle = node?.title ?? nodeId
-      setIssues((prev) => [
+      setTerminalIssues((prev) => [
         // De-duplicate: replace any existing issue for the same node.
         ...prev.filter((i) => i.nodeId !== nodeId),
         {
@@ -77,6 +82,42 @@ export function OutlineView() {
     },
     [document],
   )
+
+  // ---- Issues panel — dangling nextNode references (reactive) -------------
+  // Computed from the live document on every render, so a single `deleteNode`
+  // call surfaces any orphaned choice references within one render cycle.
+  const danglingIssues = useMemo<IssueEntry[]>(() => {
+    const nodeIds = new Set(document.map((n) => n.id))
+    const result: IssueEntry[] = []
+    for (const node of document) {
+      for (const choice of node.choices) {
+        if (choice.nextNode !== '' && !nodeIds.has(choice.nextNode)) {
+          result.push({
+            nodeId: node.id,
+            nodeTitle: node.title,
+            message: `Choice "${choice.choiceText || '(unnamed)'}" references missing node "${choice.nextNode}".`,
+          })
+        }
+      }
+    }
+    return result
+  }, [document])
+
+  const allIssues = [...terminalIssues, ...danglingIssues]
+
+  // ---- Focus management — new node created via nextNode combobox ----------
+  const [focusTargetId, setFocusTargetId] = useState<string | null>(null)
+
+  const handleNewNodeCreated = useCallback((newNodeId: string) => {
+    setFocusTargetId(newNodeId)
+  }, [])
+
+  const handleFocusApplied = useCallback(() => {
+    setFocusTargetId(null)
+  }, [])
+
+  // ---- allNodeIds — stable list for ChoiceRow selects ---------------------
+  const allNodeIds = useMemo(() => document.map((n) => n.id), [document])
 
   // ---- Empty state --------------------------------------------------------
   if (document.length === 0) {
@@ -105,16 +146,20 @@ export function OutlineView() {
             node={node}
             onAnnounce={announce}
             onChoicesCleared={handleChoicesCleared}
+            allNodeIds={allNodeIds}
+            onNewNodeCreated={handleNewNodeCreated}
+            focusTitleOnMount={focusTargetId === node.id}
+            onFocusApplied={handleFocusApplied}
           />
         ))}
       </ul>
 
-      {issues.length > 0 && (
+      {allIssues.length > 0 && (
         <section aria-label="Issues">
           <h2>Issues</h2>
           <ul>
-            {issues.map((issue) => (
-              <li key={issue.nodeId}>
+            {allIssues.map((issue, i) => (
+              <li key={`${issue.nodeId}-${i}`}>
                 <strong>{issue.nodeTitle}</strong>: {issue.message}
               </li>
             ))}

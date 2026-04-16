@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, fireEvent, screen, within } from '@testing-library/react'
+import { render, fireEvent, screen, within, act } from '@testing-library/react'
 import { axe } from 'jest-axe'
 import { OutlineView } from './OutlineView'
 import { AdventureStoreProvider } from '../../store/StoreContext'
@@ -7,6 +7,7 @@ import { createAdventureStore } from '../../store/adventureStore'
 import { InMemoryRepository } from '../../repository/InMemoryRepository'
 import type { AdventureNode, Choice } from '../../types/adventure'
 import { NODE_TYPES } from './NodeRow'
+import { CREATE_NEW_NODE_VALUE } from './ChoiceRow'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -345,5 +346,317 @@ describe('OutlineView — multiple nodes', () => {
     const { container } = renderOutline(store)
     const list = container.querySelector('ul[aria-label="Adventure outline"]')!
     expect(list.querySelectorAll(':scope > li')).toHaveLength(3)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-530: Choice editing
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — choice editing: add / delete', () => {
+  it('shows "Add choice" button for non-terminal nodes', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'narrative' })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByRole('button', { name: 'Add choice' })).toBeTruthy()
+  })
+
+  it('adds a choice to the store when "Add choice" is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'decision' })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add choice' }))
+
+    expect(store.getState().document[0]?.choices).toHaveLength(1)
+  })
+
+  it('renders one choice row per choice in the store', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2'), makeChoice('n3')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    // Each choice row renders a "Delete choice" button.
+    expect(screen.getAllByRole('button', { name: 'Delete choice' })).toHaveLength(2)
+  })
+
+  it('removes a choice from the store when "Delete choice" is clicked', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2'), makeChoice('n3')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete choice' })
+    fireEvent.click(deleteButtons[0]!)
+
+    expect(store.getState().document[0]?.choices).toHaveLength(1)
+  })
+})
+
+describe('OutlineView — choice editing: choiceText field', () => {
+  it('commits choiceText to the store on blur', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const choiceTextInput = screen.getByLabelText('Choice text') as HTMLInputElement
+    fireEvent.change(choiceTextInput, { target: { value: 'Go north' } })
+    fireEvent.blur(choiceTextInput)
+
+    expect(store.getState().document[0]?.choices[0]?.choiceText).toBe('Go north')
+  })
+
+  it('does not dispatch when choiceText is unchanged on blur', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [{ ...makeChoice('n2'), choiceText: 'Existing text' }] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.blur(screen.getByLabelText('Choice text'))
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+})
+
+describe('OutlineView — choice editing: nextNode select', () => {
+  it('lists all node ids in the nextNode select', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const select = screen.getByLabelText('Next node') as HTMLSelectElement
+    const optionValues = Array.from(select.options).map((o) => o.value)
+
+    expect(optionValues).toContain('n1')
+    expect(optionValues).toContain('n2')
+    expect(optionValues).toContain('n3')
+  })
+
+  it('includes a "Create new node" option in the nextNode select', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const select = screen.getByLabelText('Next node') as HTMLSelectElement
+    const optionValues = Array.from(select.options).map((o) => o.value)
+    expect(optionValues).toContain(CREATE_NEW_NODE_VALUE)
+  })
+
+  it('commits nextNode to the store on select change', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Next node'), { target: { value: 'n3' } })
+
+    expect(store.getState().document[0]?.choices[0]?.nextNode).toBe('n3')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-530 AC: terminal nodes show accessible explanation
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — terminal node accessible message', () => {
+  it('renders an explanation paragraph for "end" nodes instead of the choices section', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'end' })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
+    expect(screen.getByText(/Choices are not available for terminal nodes/i)).toBeTruthy()
+  })
+
+  it('renders an explanation paragraph for "adventure_success" nodes', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { node_type: 'adventure_success' }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
+    expect(screen.getByText(/Choices are not available for terminal nodes/i)).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-530 AC: "Create new node" via nextNode select
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — create new node via nextNode combobox', () => {
+  it('creates a stub node and links the choice when "Create new node" is selected', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Next node'), {
+      target: { value: CREATE_NEW_NODE_VALUE },
+    })
+
+    expect(store.getState().document).toHaveLength(3)
+    const newNode = store.getState().document[2]!
+    expect(newNode.title).toBe('New node')
+    expect(newNode.node_type).toBe('narrative')
+    // The choice must now point to the new stub node.
+    expect(store.getState().document[0]?.choices[0]?.nextNode).toBe(newNode.id)
+  })
+
+  it('opens the new node row and focuses its title field after creation', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('') ] }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Next node'), {
+      target: { value: CREATE_NEW_NODE_VALUE },
+    })
+
+    // The new node row should have its <details> opened.
+    const allDetails = container.querySelectorAll(
+      'ul[aria-label="Adventure outline"] > li > details',
+    )
+    const newNodeDetails = allDetails[1] as HTMLDetailsElement
+    expect(newNodeDetails.open).toBe(true)
+
+    // Focus should be on the new node's title input.
+    const focusedElement = container.ownerDocument.activeElement
+    expect(focusedElement?.tagName).toBe('INPUT')
+    expect((focusedElement as HTMLInputElement).value).toBe('New node')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-530 AC: dangling nextNode references surfaced in issues panel
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — dangling reference issues', () => {
+  it('shows an issue when a choice references a node that does not exist', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [{ choiceText: 'Go there', choiceResponseConstraint: '', nextNode: 'ghost' }] }),
+    ])
+    renderOutline(store)
+
+    const issuesSection = screen.getByRole('region', { name: 'Issues' })
+    expect(within(issuesSection).getByText(/missing node "ghost"/i)).toBeTruthy()
+  })
+
+  it('surfaces a dangling reference within one render cycle after deleteNode', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    renderOutline(store)
+
+    // n2 is deleted — n1's choice now dangles. Wrap in act() so React flushes.
+    act(() => {
+      store.getState().deleteNode('n2')
+    })
+
+    const issuesSection = screen.getByRole('region', { name: 'Issues' })
+    expect(within(issuesSection).getByText(/missing node "n2"/i)).toBeTruthy()
+  })
+
+  it('removes the dangling issue after the choice nextNode is updated to a valid target', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    // Delete n2 to create a dangling reference.
+    act(() => {
+      store.getState().deleteNode('n2')
+    })
+    expect(screen.getByRole('region', { name: 'Issues' })).toBeTruthy()
+
+    // Fix the dangling reference by selecting n3.
+    fireEvent.change(screen.getByLabelText('Next node'), { target: { value: 'n3' } })
+
+    expect(screen.queryByRole('region', { name: 'Issues' })).toBeNull()
+  })
+
+  it('shows a "(not found)" option in the nextNode select for a dangling reference', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    act(() => {
+      store.getState().deleteNode('n2')
+    })
+
+    const select = screen.getByLabelText('Next node') as HTMLSelectElement
+    const optionLabels = Array.from(select.options).map((o) => o.text)
+    expect(optionLabels.some((l) => l.includes('not found'))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-530 AC: zero axe violations with choices visible
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — accessibility with choices', () => {
+  it('has no axe violations when choice rows are visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2'), makeChoice('n3')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+
+  it('has no axe violations with a dangling reference visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2')] }),
+      makeNode('n2'),
+    ])
+    const { container } = renderOutline(store)
+
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    store.getState().deleteNode('n2')
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
   })
 })

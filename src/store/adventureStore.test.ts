@@ -402,3 +402,79 @@ describe('addChoice', () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// createNodeAndLinkChoice
+// ---------------------------------------------------------------------------
+
+describe('createNodeAndLinkChoice', () => {
+  it('creates a stub node and appends it to the document', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { choices: [makeChoice('')] }),
+    ])
+
+    store.getState().createNodeAndLinkChoice('a', 0)
+
+    expect(store.getState().document).toHaveLength(2)
+    const stub = store.getState().document[1]!
+    expect(stub.node_type).toBe('narrative')
+    expect(stub.title).toBe('New node')
+    expect(stub.choices).toHaveLength(0)
+  })
+
+  it('sets the choice nextNode to the stub id atomically', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { choices: [makeChoice('')] }),
+    ])
+
+    const newId = store.getState().createNodeAndLinkChoice('a', 0)
+
+    const { document } = store.getState()
+    const choice = document.find((n) => n.id === 'a')!.choices[0]!
+    expect(choice.nextNode).toBe(newId)
+    // Both the updated choice and the stub node are visible in the same snapshot.
+    expect(document.find((n) => n.id === newId)).toBeDefined()
+  })
+
+  it('returns the new node id as a non-empty string', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { choices: [makeChoice('')] }),
+    ])
+
+    const newId = store.getState().createNodeAndLinkChoice('a', 0)
+
+    expect(typeof newId).toBe('string')
+    expect(newId.length).toBeGreaterThan(0)
+  })
+
+  it('only updates the targeted choice index, leaving others unchanged', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { choices: [makeChoice('b'), makeChoice('')] }),
+      makeNode('b'),
+    ])
+
+    store.getState().createNodeAndLinkChoice('a', 1)
+
+    const node = store.getState().document.find((n) => n.id === 'a')!
+    expect(node.choices[0]!.nextNode).toBe('b') // untouched
+    expect(node.choices[1]!.nextNode).not.toBe('') // updated
+  })
+
+  it('throws NODE_NOT_FOUND when the target node does not exist', () => {
+    const store = makeStore()
+    expect(() => store.getState().createNodeAndLinkChoice('ghost', 0)).toThrow(
+      expect.objectContaining({ code: 'NODE_NOT_FOUND' }),
+    )
+  })
+
+  it('updates classifierCache in the same transaction', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { choices: [makeChoice('')] }),
+    ])
+
+    const newId = store.getState().createNodeAndLinkChoice('a', 0)
+
+    const { classifierCache } = store.getState()
+    expect(classifierCache.has(newId)).toBe(true)
+  })
+})
