@@ -843,3 +843,165 @@ describe('OutlineView — accessibility with choices', () => {
     expect(results).toHaveNoViolations()
   })
 })
+
+// ---------------------------------------------------------------------------
+// OPS-532: Audio fields — entry_foley, music, sounds
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — audio fields: render', () => {
+  it('renders Entry foley, Music, and Ambient sounds inputs when a node is expanded', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByLabelText('Entry foley')).toBeTruthy()
+    expect(screen.getByLabelText('Music')).toBeTruthy()
+    expect(screen.getByLabelText('Ambient sounds')).toBeTruthy()
+  })
+
+  it('prepopulates audio fields from the node document', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { entry_foley: 'cave.mp3', music: 'theme.ogg', sounds: 'wind.mp3' }),
+    ])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Entry foley') as HTMLInputElement).value).toBe('cave.mp3')
+    expect((screen.getByLabelText('Music') as HTMLInputElement).value).toBe('theme.ogg')
+    expect((screen.getByLabelText('Ambient sounds') as HTMLInputElement).value).toBe('wind.mp3')
+  })
+
+  it('shows empty audio inputs when fields are absent from the node', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect((screen.getByLabelText('Entry foley') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Music') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Ambient sounds') as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('OutlineView — audio fields: commit on blur', () => {
+  it('commits entry_foley to store on blur', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Entry foley'), { target: { value: 'drip.mp3' } })
+    fireEvent.blur(screen.getByLabelText('Entry foley'))
+
+    expect(store.getState().document[0]?.entry_foley).toBe('drip.mp3')
+  })
+
+  it('commits music to store on blur', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Music'), { target: { value: 'boss.ogg' } })
+    fireEvent.blur(screen.getByLabelText('Music'))
+
+    expect(store.getState().document[0]?.music).toBe('boss.ogg')
+  })
+
+  it('commits sounds to store on blur', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Ambient sounds'), { target: { value: 'rain.mp3' } })
+    fireEvent.blur(screen.getByLabelText('Ambient sounds'))
+
+    expect(store.getState().document[0]?.sounds).toBe('rain.mp3')
+  })
+
+  it('does not dispatch when entry_foley is unchanged on blur', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { entry_foley: 'existing.mp3' })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    const docBefore = store.getState().document
+    fireEvent.blur(screen.getByLabelText('Entry foley'))
+
+    expect(store.getState().document).toBe(docBefore)
+  })
+
+  it('clears entry_foley field (sets to undefined) when value is blanked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { entry_foley: 'cave.mp3' })])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    fireEvent.change(screen.getByLabelText('Entry foley'), { target: { value: '' } })
+    fireEvent.blur(screen.getByLabelText('Entry foley'))
+
+    expect(store.getState().document[0]?.entry_foley).toBeUndefined()
+  })
+})
+
+describe('OutlineView — audio fields: accessibility', () => {
+  it('has no axe violations with audio fields visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { entry_foley: 'cave.mp3', music: 'theme.ogg', sounds: 'wind.mp3' }),
+    ])
+    const { container } = renderOutline(store)
+
+    const allDetails = container.querySelectorAll('details')
+    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-532: Asset manifest panel — integration via OutlineView
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — asset manifest panel', () => {
+  it('renders the asset manifest region', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    renderOutline(store)
+
+    expect(screen.getByRole('region', { name: 'Asset manifest' })).toBeTruthy()
+  })
+
+  it('shows "No audio assets referenced" when no audio fields are set', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    renderOutline(store)
+
+    expect(screen.getByText(/No audio assets referenced/i)).toBeTruthy()
+  })
+
+  it('lists audio assets from nodes in the manifest', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { music: 'theme.ogg' }),
+    ])
+    renderOutline(store)
+
+    expect(screen.getByText('theme.ogg')).toBeTruthy()
+  })
+
+  it('updates the manifest when an audio field is committed', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    openDetails(container)
+
+    expect(screen.getByText(/No audio assets referenced/i)).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Music'), { target: { value: 'new_track.ogg' } })
+    fireEvent.blur(screen.getByLabelText('Music'))
+
+    expect(screen.getByText('new_track.ogg')).toBeTruthy()
+  })
+
+  it('has no axe violations with the asset manifest visible', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { entry_foley: 'cave.mp3', music: 'theme.ogg' }),
+    ])
+    const { container } = renderOutline(store)
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})

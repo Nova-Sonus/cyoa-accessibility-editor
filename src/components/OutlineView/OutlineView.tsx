@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import { deriveIssues } from '../IssuesPanel/deriveIssues'
 import { IssuesPanel } from '../IssuesPanel/IssuesPanel'
+import { AssetManifest } from '../AssetManifest'
 import { NodeRow } from './NodeRow'
 
 /**
@@ -171,6 +172,8 @@ export function OutlineView() {
       </ul>
 
       <IssuesPanel issues={issues} onActivate={handleActivateIssue} />
+
+      <AssetManifest document={document} />
     </div>
   )
 }

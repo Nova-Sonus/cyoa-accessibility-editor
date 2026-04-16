@@ -71,11 +71,17 @@ export function NodeRow({
   const titleId = `${baseId}-title`
   const typeId = `${baseId}-type`
   const narrativeId = `${baseId}-narrative`
+  const entryFoleyId = `${baseId}-entry-foley`
+  const musicId = `${baseId}-music`
+  const soundsId = `${baseId}-sounds`
   const noChoicesHintId = `${baseId}-no-choices-hint`
 
   // Local draft state — committed to store on blur / change.
   const [titleDraft, setTitleDraft] = useState(node.title)
   const [narrativeDraft, setNarrativeDraft] = useState(node.narrativeText)
+  const [entryFoleyDraft, setEntryFoleyDraft] = useState(node.entry_foley ?? '')
+  const [musicDraft, setMusicDraft] = useState(node.music ?? '')
+  const [soundsDraft, setSoundsDraft] = useState(node.sounds ?? '')
 
   // Sync drafts when the node changes from outside (e.g. adventure loaded).
   useEffect(() => {
@@ -85,6 +91,18 @@ export function NodeRow({
   useEffect(() => {
     setNarrativeDraft(node.narrativeText)
   }, [node.narrativeText])
+
+  useEffect(() => {
+    setEntryFoleyDraft(node.entry_foley ?? '')
+  }, [node.entry_foley])
+
+  useEffect(() => {
+    setMusicDraft(node.music ?? '')
+  }, [node.music])
+
+  useEffect(() => {
+    setSoundsDraft(node.sounds ?? '')
+  }, [node.sounds])
 
   // Focus management — open the row and focus the title input when requested.
   useEffect(() => {
@@ -127,6 +145,24 @@ export function NodeRow({
     },
     [node.id, node.choices.length, updateNode, onAnnounce, onChoicesCleared],
   )
+
+  const handleEntryFoleyBlur = useCallback(() => {
+    if (entryFoleyDraft !== (node.entry_foley ?? '')) {
+      updateNode(node.id, { entry_foley: entryFoleyDraft || undefined })
+    }
+  }, [entryFoleyDraft, node.id, node.entry_foley, updateNode])
+
+  const handleMusicBlur = useCallback(() => {
+    if (musicDraft !== (node.music ?? '')) {
+      updateNode(node.id, { music: musicDraft || undefined })
+    }
+  }, [musicDraft, node.id, node.music, updateNode])
+
+  const handleSoundsBlur = useCallback(() => {
+    if (soundsDraft !== (node.sounds ?? '')) {
+      updateNode(node.id, { sounds: soundsDraft || undefined })
+    }
+  }, [soundsDraft, node.id, node.sounds, updateNode])
 
   const handleAddChoice = useCallback(() => {
     addChoice(node.id, { choiceText: '', choiceResponseConstraint: '', nextNode: '' })
@@ -175,6 +211,39 @@ export function NodeRow({
               value={narrativeDraft}
               onChange={(e) => setNarrativeDraft(e.target.value)}
               onBlur={handleNarrativeBlur}
+            />
+          </div>
+
+          <div>
+            <label htmlFor={entryFoleyId}>Entry foley</label>
+            <input
+              id={entryFoleyId}
+              type="text"
+              value={entryFoleyDraft}
+              onChange={(e) => setEntryFoleyDraft(e.target.value)}
+              onBlur={handleEntryFoleyBlur}
+            />
+          </div>
+
+          <div>
+            <label htmlFor={musicId}>Music</label>
+            <input
+              id={musicId}
+              type="text"
+              value={musicDraft}
+              onChange={(e) => setMusicDraft(e.target.value)}
+              onBlur={handleMusicBlur}
+            />
+          </div>
+
+          <div>
+            <label htmlFor={soundsId}>Ambient sounds</label>
+            <input
+              id={soundsId}
+              type="text"
+              value={soundsDraft}
+              onChange={(e) => setSoundsDraft(e.target.value)}
+              onBlur={handleSoundsBlur}
             />
           </div>
 
