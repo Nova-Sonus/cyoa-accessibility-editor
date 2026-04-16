@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, fireEvent, screen, within } from '@testing-library/react'
 import { axe } from 'jest-axe'
 import { OutlineView } from './OutlineView'
