@@ -569,9 +569,9 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
 
       {/* Accessible node list — screen reader alternative to the visual graph */}
       <section aria-label="Node list (screen reader summary)">
-        <h3 style={{ fontSize: '14px', margin: '16px 0 4px' }}>
+        <h2 style={{ fontSize: '14px', margin: '16px 0 4px' }}>
           Nodes ({nodes.length})
-        </h3>
+        </h2>
         <ul
           style={{
             listStyle: 'none',
