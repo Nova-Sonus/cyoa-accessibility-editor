@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import type { AdventureNode } from '../../types/adventure'
 import { useCanvasLayout, edgePath, NODE_WIDTH, NODE_HEIGHT } from './useCanvasLayout'
@@ -47,18 +47,6 @@ function truncate(text: string, max = 26): string {
   return text.length > max ? text.slice(0, max - 1) + '…' : text
 }
 
-function nodeAriaLabel(node: PositionedNode): string {
-  const typeParts: string[] = [node.nodeType.replace(/_/g, ' ')]
-  if (node.tags.isCheckpoint) typeParts.push('checkpoint')
-  if (node.tags.isOrphan) typeParts.push('orphan')
-  if (node.tags.unreachable) typeParts.push('unreachable')
-  const choiceLabel =
-    node.choiceCount === 0
-      ? 'no choices'
-      : `${node.choiceCount} ${node.choiceCount === 1 ? 'choice' : 'choices'}`
-  return `${node.title}, ${typeParts.join(', ')}, ${choiceLabel}. Press Enter to open in outline view.`
-}
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -67,16 +55,10 @@ function NodeBox({
   node,
   isSelected,
   onClick,
-  onKeyDown,
-  tabIndex,
-  nodeRef,
 }: {
   node: PositionedNode
   isSelected: boolean
   onClick: () => void
-  onKeyDown: (e: React.KeyboardEvent<SVGGElement>) => void
-  tabIndex: number
-  nodeRef: (el: SVGGElement | null) => void
 }) {
   const colours = NODE_COLOURS[node.nodeType]
   const strokeColor = isSelected ? SELECTED_STROKE : colours.stroke
@@ -92,13 +74,8 @@ function NodeBox({
 
   return (
     <g
-      role="button"
-      aria-label={nodeAriaLabel(node)}
-      tabIndex={tabIndex}
       onClick={onClick}
-      onKeyDown={onKeyDown}
-      ref={nodeRef}
-      style={{ cursor: 'pointer', outline: 'none' }}
+      style={{ cursor: 'pointer' }}
       opacity={opacity}
     >
       {/* Selection / focus ring drawn outside the box */}
@@ -316,12 +293,13 @@ interface CanvasViewProps {
  * Canvas view — a zoomable, pannable SVG graph of the adventure.
  *
  * Accessibility model:
- * - The SVG uses a *composite widget* pattern (roving tabIndex) so keyboard
- *   users can arrow-key through nodes without excessive Tab stops.
- * - Each node has `role="button"` and a descriptive `aria-label`.
- * - Enter / Space on a node calls `onNodeActivate` which switches to the
- *   outline view and moves focus there — the primary editing interface.
- * - The diagram container has `aria-label` summarising node/edge counts.
+ * - The SVG is `aria-hidden="true"` so its visual content is invisible to AT.
+ * - The diagram `<div role="region">` is the keyboard entry point (tabIndex=0).
+ *   Arrow keys move the visual selection; Enter / Space activate the selected
+ *   node and switch to outline view.  This avoids `aria-hidden-focus`
+ *   violations that arise from placing tabIndex inside an aria-hidden ancestor.
+ * - The accessible `<ul>` below the SVG is the screen-reader interface: one
+ *   `<button>` per node with a descriptive label.
  * - Colour is never the sole differentiator (badges carry text).
  */
 export function CanvasView({ onNodeActivate }: CanvasViewProps) {
@@ -338,17 +316,8 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const isDragging = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
 
-  // ---- Selection (roving tabIndex) ----------------------------------------
+  // ---- Selection state (visual highlight only — no focus inside SVG) -------
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const nodeRefs = useRef<Array<SVGGElement | null>>([])
-
-  // Keep nodeRefs array in sync with node count
-  useEffect(() => {
-    nodeRefs.current = nodeRefs.current.slice(0, nodes.length)
-  }, [nodes.length])
-
-  // Focus the selected node element when selection changes via keyboard
-  const lastInteractionWasKeyboard = useRef(false)
 
   // ---- Zoom controls ------------------------------------------------------
   const handleZoomIn = useCallback(() => {
@@ -399,28 +368,35 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   // ---- Node interaction ---------------------------------------------------
   const handleNodeClick = useCallback(
     (nodeId: string, index: number) => {
-      lastInteractionWasKeyboard.current = false
       setSelectedIndex(index)
       onNodeActivate(nodeId)
     },
     [onNodeActivate],
   )
 
-  const handleNodeKeyDown = useCallback(
-    (e: React.KeyboardEvent<SVGGElement>, nodeId: string, index: number) => {
+  /**
+   * Keyboard handler on the `<div role="region">` container.
+   *
+   * The SVG is aria-hidden so no SVG element carries tabIndex > -1.  Focus
+   * stays on the region div; arrow keys move the visual selection, and
+   * Enter / Space activate the selected node.
+   */
+  const handleRegionKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        onNodeActivate(nodeId)
+        const node = nodes[selectedIndex]
+        if (node) onNodeActivate(node.id)
         return
       }
 
-      let nextIndex = index
+      let nextIndex = selectedIndex
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         e.preventDefault()
-        nextIndex = Math.min(nodes.length - 1, index + 1)
+        nextIndex = Math.min(nodes.length - 1, selectedIndex + 1)
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         e.preventDefault()
-        nextIndex = Math.max(0, index - 1)
+        nextIndex = Math.max(0, selectedIndex - 1)
       } else if (e.key === 'Home') {
         e.preventDefault()
         nextIndex = 0
@@ -431,11 +407,9 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         return
       }
 
-      lastInteractionWasKeyboard.current = true
       setSelectedIndex(nextIndex)
-      nodeRefs.current[nextIndex]?.focus()
     },
-    [nodes.length],
+    [nodes, selectedIndex, onNodeActivate],
   )
 
   // ---- Empty state --------------------------------------------------------
@@ -471,10 +445,13 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
 
       <CanvasLegend />
 
-      {/* SVG canvas — role="region" is required for aria-label to be valid on a div */}
+      {/* SVG canvas — role="region" required for aria-label; tabIndex makes it
+          the keyboard entry point so focus never enters the aria-hidden SVG. */}
       <div
         role="region"
         aria-label={graphLabel}
+        tabIndex={0}
+        onKeyDown={handleRegionKeyDown}
         style={{ overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '8px' }}
       >
         <svg
@@ -554,12 +531,7 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
                   key={node.id}
                   node={node}
                   isSelected={selectedIndex === i}
-                  tabIndex={selectedIndex === i ? 0 : -1}
                   onClick={() => handleNodeClick(node.id, i)}
-                  onKeyDown={(e) => handleNodeKeyDown(e, node.id, i)}
-                  nodeRef={(el) => {
-                    nodeRefs.current[i] = el
-                  }}
                 />
               ))}
             </g>

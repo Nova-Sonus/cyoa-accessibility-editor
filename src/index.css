@@ -1,0 +1,21 @@
+/*
+ * Nova Sonus CYOA Editor — global baseline styles
+ *
+ * WCAG 2.5.8 (Target Size, Minimum) requires interactive targets to be at
+ * least 24 × 24 CSS pixels.  Browser default button styles render at ~21 px
+ * in Chrome; the min-height rule below ensures compliance without changing
+ * any visual layout beyond the minimum necessary padding.
+ */
+
+button {
+  min-height: 24px;
+  min-width: 24px;
+}
+
+/*
+ * <details>/<summary> is used for the expandable NodeRow headers in the
+ * outline view.  Default UA rendering is ~18 px — below the 24 px minimum.
+ */
+summary {
+  min-height: 24px;
+}

@@ -8,17 +8,25 @@ import type { Adventure } from './types/adventure'
 
 type ActiveView = 'outline' | 'canvas'
 
-/** Minimal schema-valid adventure used when the author starts a new document. */
-function makeNewAdventure(): Adventure {
-  return [
-    {
-      id: crypto.randomUUID(),
-      title: 'New Adventure',
-      node_type: 'start',
-      narrativeText: '',
-      choices: [],
-    },
-  ]
+/**
+ * Builds a minimal schema-valid adventure for a fresh document.
+ * Returns both the adventure array and the first node's id so the caller
+ * can move keyboard focus there after loading.
+ */
+function makeNewAdventure(): { adventure: Adventure; firstNodeId: string } {
+  const firstNodeId = crypto.randomUUID()
+  return {
+    firstNodeId,
+    adventure: [
+      {
+        id: firstNodeId,
+        title: 'New Adventure',
+        node_type: 'start',
+        narrativeText: '',
+        choices: [],
+      },
+    ],
+  }
 }
 
 export default function App() {
@@ -54,10 +62,13 @@ export default function App() {
 
   const handleNewAdventure = useCallback(async () => {
     const id = crypto.randomUUID()
-    const adventure = makeNewAdventure()
+    const { adventure, firstNodeId } = makeNewAdventure()
     // Save first so the adventure exists in the repository before loading.
     await repoRef.current.save(id, adventure)
     await storeRef.current.getState().loadAdventure(id)
+    // Move keyboard focus to the new node's title field so authors can
+    // start typing immediately without tabbing through the UI.
+    setPendingFocusId(firstNodeId)
   }, [])
 
   const handleCanvasNodeActivate = useCallback((nodeId: string) => {
