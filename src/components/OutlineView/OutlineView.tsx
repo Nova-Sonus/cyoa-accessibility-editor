@@ -5,6 +5,17 @@ import { IssuesPanel } from '../IssuesPanel/IssuesPanel'
 import { AssetManifest } from '../AssetManifest'
 import { NodeRow } from './NodeRow'
 
+interface OutlineViewProps {
+  /**
+   * When set, the outline will scroll to and focus the title input of this
+   * node on the next render.  Consumed once — the caller should clear it via
+   * `onFocusConsumed` to allow it to be re-used for future activations.
+   */
+  focusNodeId?: string | null
+  /** Called immediately after the pending focus has been applied. */
+  onFocusConsumed?: () => void
+}
+
 /**
  * Visually hides an element while keeping it available to assistive technology.
  * Applied to the consolidated `aria-live` region so it does not occupy visual
@@ -42,7 +53,7 @@ const visuallyHiddenStyle: React.CSSProperties = {
  * - Focus management: activating an issue item, or creating a stub node via the
  *   nextNode combobox, moves focus to the target node's title field.
  */
-export function OutlineView() {
+export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps = {}) {
   const document = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
 
@@ -120,6 +131,16 @@ export function OutlineView() {
 
   // ---- Focus management — new node or issue activation -------------------
   const [focusTargetId, setFocusTargetId] = useState<string | null>(null)
+
+  // When a focusNodeId is passed in from the parent (e.g. canvas node activation),
+  // apply it as the focus target once and notify the parent so the prop can be
+  // cleared for future activations.
+  useEffect(() => {
+    if (focusNodeId) {
+      setFocusTargetId(focusNodeId)
+      onFocusConsumed?.()
+    }
+  }, [focusNodeId, onFocusConsumed])
 
   const handleNewNodeCreated = useCallback((newNodeId: string) => {
     setFocusTargetId(newNodeId)
