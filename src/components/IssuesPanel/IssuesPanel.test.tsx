@@ -230,3 +230,56 @@ describe('IssuesPanel — with issues', () => {
     expect(await axe(container)).toHaveNoViolations()
   })
 })
+
+// ---------------------------------------------------------------------------
+// IssuesPanel — repositoryError prop
+// ---------------------------------------------------------------------------
+
+describe('IssuesPanel — repositoryError', () => {
+  it('renders the error message when repositoryError is set', () => {
+    render(<IssuesPanel issues={[]} onActivate={vi.fn()} repositoryError="Save failed: invalid schema." />)
+    expect(screen.getByText(/Save failed: invalid schema/i)).toBeTruthy()
+  })
+
+  it('renders the error with role="alert" for immediate announcement', () => {
+    render(<IssuesPanel issues={[]} onActivate={vi.fn()} repositoryError="Save failed." />)
+    expect(screen.getByRole('alert')).toBeTruthy()
+  })
+
+  it('suppresses "No issues found" when there is a repository error but no structural issues', () => {
+    render(<IssuesPanel issues={[]} onActivate={vi.fn()} repositoryError="Save failed." />)
+    expect(screen.queryByText(/No issues found/i)).toBeNull()
+  })
+
+  it('shows both the repository error and structural issues when both are present', () => {
+    const issue = {
+      id: 'orphan:n1',
+      kind: 'orphan' as const,
+      nodeId: 'n1',
+      nodeTitle: 'Lost Node',
+      message: 'Orphan node — not referenced by any other node.',
+    }
+    render(
+      <IssuesPanel
+        issues={[issue]}
+        onActivate={vi.fn()}
+        repositoryError="Save failed: invalid schema."
+      />,
+    )
+    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('button')).toBeTruthy()
+  })
+
+  it('renders nothing for the error when repositoryError is null', () => {
+    render(<IssuesPanel issues={[]} onActivate={vi.fn()} repositoryError={null} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText(/No issues found/i)).toBeTruthy()
+  })
+
+  it('has no axe violations when repositoryError is shown', async () => {
+    const { container } = render(
+      <IssuesPanel issues={[]} onActivate={vi.fn()} repositoryError="Save failed." />,
+    )
+    expect(await axe(container)).toHaveNoViolations()
+  })
+})

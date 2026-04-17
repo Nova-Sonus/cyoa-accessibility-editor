@@ -1,23 +1,64 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { createAdventureStore } from './store'
 import { AdventureStoreProvider } from './store/StoreContext'
-import { InMemoryRepository } from './repository/InMemoryRepository'
+import { LocalFileRepository } from './repository/LocalFileRepository'
 import { OutlineView } from './components/OutlineView/OutlineView'
 import { CanvasView } from './components/CanvasView'
+import type { Adventure } from './types/adventure'
 
 type ActiveView = 'outline' | 'canvas'
 
+/** Minimal schema-valid adventure used when the author starts a new document. */
+function makeNewAdventure(): Adventure {
+  return [
+    {
+      id: crypto.randomUUID(),
+      title: 'New Adventure',
+      node_type: 'start',
+      narrativeText: '',
+      choices: [],
+    },
+  ]
+}
+
 export default function App() {
   // Composition root — store is created once and distributed via context.
-  // Replace InMemoryRepository with LocalFileRepository or IndexedDBRepository
-  // when those implementations land (OPS-533).
-  const storeRef = useRef(createAdventureStore(new InMemoryRepository()))
+  // LocalFileRepository persists adventures to localStorage so that work
+  // survives page reloads (OPS-535).
+  const repoRef = useRef(new LocalFileRepository())
+  const storeRef = useRef(createAdventureStore(repoRef.current))
 
   const [activeView, setActiveView] = useState<ActiveView>('outline')
 
   // When the user activates a node from the canvas view, switch to outline
   // and focus that node's title input.
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
+
+  // Auto-load the most recently saved adventure on first mount so that
+  // refreshing the page restores the previous session.
+  useEffect(() => {
+    const repo = repoRef.current
+    const store = storeRef.current
+    repo
+      .list()
+      .then((ids) => {
+        if (ids.length > 0) {
+          return store.getState().loadAdventure(ids[ids.length - 1]!)
+        }
+      })
+      .catch(() => {
+        // Silently ignore auto-load failures; the empty-state UI guides the
+        // author to create a new adventure.
+      })
+  }, [])
+
+  const handleNewAdventure = useCallback(async () => {
+    const id = crypto.randomUUID()
+    const adventure = makeNewAdventure()
+    // Save first so the adventure exists in the repository before loading.
+    await repoRef.current.save(id, adventure)
+    await storeRef.current.getState().loadAdventure(id)
+  }, [])
 
   const handleCanvasNodeActivate = useCallback((nodeId: string) => {
     setPendingFocusId(nodeId)
@@ -46,8 +87,15 @@ export default function App() {
             type="button"
             onClick={() => setActiveView('canvas')}
             aria-pressed={activeView === 'canvas'}
+            style={{ marginRight: '8px' }}
           >
             Canvas
+          </button>
+          <button
+            type="button"
+            onClick={() => { void handleNewAdventure() }}
+          >
+            New adventure
           </button>
         </nav>
 

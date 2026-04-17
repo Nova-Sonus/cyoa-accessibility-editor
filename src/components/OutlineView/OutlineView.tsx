@@ -52,10 +52,13 @@ const visuallyHiddenStyle: React.CSSProperties = {
  *   not once per issue — prevents announcement storms.
  * - Focus management: activating an issue item, or creating a stub node via the
  *   nextNode combobox, moves focus to the target node's title field.
+ * - Repository errors (e.g. schema-invalid save) are caught here and surfaced
+ *   in the IssuesPanel via the repositoryError prop — satisfies OPS-535 AC.
  */
 export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps = {}) {
   const document = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
+  const saveAdventure = useAdventureStore((s) => s.saveAdventure)
 
   // ---- Announcement state -------------------------------------------------
   // Clear-then-set pattern ensures identical messages re-trigger screen reader
@@ -129,6 +132,24 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     [document, announce],
   )
 
+  // ---- Save adventure -----------------------------------------------------
+  const [repositoryError, setRepositoryError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = useCallback(async () => {
+    setRepositoryError(null)
+    setIsSaving(true)
+    try {
+      await saveAdventure()
+      announce('Adventure saved.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed.'
+      setRepositoryError(message)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [saveAdventure, announce])
+
   // ---- Focus management — new node or issue activation -------------------
   const [focusTargetId, setFocusTargetId] = useState<string | null>(null)
 
@@ -192,7 +213,20 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
         ))}
       </ul>
 
-      <IssuesPanel issues={issues} onActivate={handleActivateIssue} />
+      <button
+        type="button"
+        onClick={() => { void handleSave() }}
+        disabled={isSaving}
+        style={{ marginBottom: '8px' }}
+      >
+        {isSaving ? 'Saving…' : 'Save adventure'}
+      </button>
+
+      <IssuesPanel
+        issues={issues}
+        onActivate={handleActivateIssue}
+        repositoryError={repositoryError}
+      />
 
       <AssetManifest document={document} />
     </div>
