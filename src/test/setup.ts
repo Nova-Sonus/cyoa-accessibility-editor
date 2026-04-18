@@ -2,6 +2,7 @@ import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { toHaveNoViolations } from 'jest-axe'
 import { expect } from 'vitest'
+import '@testing-library/jest-dom/vitest'
 
 // @testing-library/react only registers its afterEach(cleanup) hook when the
 // test framework exposes `afterEach` as a global.  Vitest does not do this by

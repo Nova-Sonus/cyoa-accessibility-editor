@@ -1,0 +1,43 @@
+.field {
+  margin-bottom: 12px;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.input:disabled,
+.textarea:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.textarea {
+  resize: vertical;
+  line-height: 1.5;
+  font-family: 'Source Serif 4', Georgia, serif;
+  padding: 8px 10px;
+}

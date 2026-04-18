@@ -9,6 +9,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/e2e/**'],
     coverage: {
       provider: 'v8',
+      all: false,
       include: ['src/**'],
       exclude: [
         'src/types/**',
