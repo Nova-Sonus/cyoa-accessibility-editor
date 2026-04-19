@@ -172,11 +172,7 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     return { totalNodes, totalChoices, checkpoints, terminals }
   }, [document, classifierCache])
 
-  // ---- Empty state --------------------------------------------------------
-  if (document.length === 0) {
-    return <p>No adventure loaded. Open a file to begin authoring.</p>
-  }
-
+  // ---- Node index entries — derived from document -----------------------
   const nodeIndexEntries = useMemo(
     () =>
       document.map((n) => ({
@@ -187,6 +183,11 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
       })),
     [document],
   )
+
+  // ---- Empty state --------------------------------------------------------
+  if (document.length === 0) {
+    return <p>No adventure loaded. Open a file to begin authoring.</p>
+  }
 
   return (
     <div className={styles.layout}>
@@ -276,7 +277,7 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
       </div>
 
       {/* Sidebar */}
-      <aside className={styles.sidebar}>
+      <aside className={styles.sidebar} aria-label="Sidebar">
         <div className={styles.sidebarWidget}>
           <h2 className={styles.widgetHeading}>Node index</h2>
           <NodeIndex nodes={nodeIndexEntries} onActivate={handleActivateIssue} />

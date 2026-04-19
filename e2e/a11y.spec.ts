@@ -288,7 +288,7 @@ test.describe('Landmark and heading structure', () => {
       page.getByRole('region', { name: 'Asset manifest' }),
     ).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Asset manifest', level: 2 }),
+      page.getByRole('heading', { name: /Asset manifest/, level: 2 }),
     ).toBeVisible()
   })
 
