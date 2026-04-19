@@ -1,4 +1,5 @@
 import type { Issue } from './deriveIssues'
+import styles from './IssuesPanel.module.css'
 
 export interface IssuesPanelProps {
   issues: Issue[]
@@ -32,19 +33,23 @@ export interface IssuesPanelProps {
 export function IssuesPanel({ issues, onActivate, repositoryError }: IssuesPanelProps) {
   return (
     <section aria-label="Issues">
-      <h2>Issues</h2>
+      <h2 className={styles.heading}>Issues</h2>
       {repositoryError && (
-        <p role="alert" style={{ color: 'red' }}>
+        <p role="alert" className={styles.errorAlert}>
           {repositoryError}
         </p>
       )}
       {issues.length === 0 && !repositoryError ? (
-        <p>No issues found.</p>
+        <p className={styles.emptyMessage}>No issues found.</p>
       ) : issues.length > 0 ? (
-        <ul>
+        <ul className={styles.list}>
           {issues.map((issue) => (
             <li key={issue.id}>
-              <button type="button" onClick={() => onActivate(issue.nodeId)}>
+              <button
+                type="button"
+                className={styles.issueButton}
+                onClick={() => onActivate(issue.nodeId)}
+              >
                 <strong>{issue.nodeTitle}</strong>: {issue.message}
               </button>
             </li>

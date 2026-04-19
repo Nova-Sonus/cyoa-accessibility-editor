@@ -195,3 +195,101 @@
   font-size: 0.8rem;
   cursor: pointer;
 }
+
+/* ── Gameplay section — Activities fieldset ─────────────────────────── */
+
+.activitiesFieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 8px;
+}
+
+.activitiesFieldset > legend {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.activitiesList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.activityItem label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.activityItem input[type="text"] {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.removeButton {
+  padding: 4px 8px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.removeButton:hover {
+  background: #fef2f2;
+}
+
+.addButton {
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background: #f1f5f9;
+}
+
+/* ── Choices section ────────────────────────────────────────────────── */
+
+.choicesSectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 0 4px;
+}
+
+.choicesList {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

@@ -37,8 +37,8 @@ export interface NodeRowProps {
    * choices. The parent renders a corresponding entry in the issues panel.
    */
   onChoicesCleared: (nodeId: string, count: number) => void
-  /** Every node id in the document, for populating the nextNode select. */
-  allNodeIds: ReadonlyArray<string>
+  /** Every node in the document (id + title), for populating the nextNode select. */
+  allNodes: ReadonlyArray<{ id: string; title: string }>
   /**
    * Called when the user creates a stub node via the nextNode combobox.
    * The parent uses this to move focus to the new node's title field.
@@ -68,7 +68,7 @@ export function NodeRow({
   audioSuggestions,
   onAnnounce,
   onChoicesCleared,
-  allNodeIds,
+  allNodes,
   onNewNodeCreated,
   focusTitleOnMount,
   onFocusApplied,
@@ -445,12 +445,12 @@ export function NodeRow({
               <label htmlFor={checkpointId}>Checkpoint</label>
             </div>
 
-            <fieldset>
+            <fieldset className={styles.activitiesFieldset}>
               <legend id={activitiesGroupId}>Activities</legend>
               {activitiesDraft.length > 0 && (
-                <ul>
+                <ul className={styles.activitiesList}>
                   {activitiesDraft.map((activity, i) => (
-                    <li key={i}>
+                    <li key={i} className={styles.activityItem}>
                       <label htmlFor={`${activitiesGroupId}-${i}`}>Activity {i + 1}</label>
                       <input
                         id={`${activitiesGroupId}-${i}`}
@@ -463,14 +463,18 @@ export function NodeRow({
                           activityRefs.current[i] = el
                         }}
                       />
-                      <button type="button" onClick={() => handleRemoveActivity(i)}>
+                      <button
+                        type="button"
+                        className={styles.removeButton}
+                        onClick={() => handleRemoveActivity(i)}
+                      >
                         Remove activity {i + 1}
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-              <button type="button" onClick={handleAddActivity}>
+              <button type="button" className={styles.addButton} onClick={handleAddActivity}>
                 Add activity
               </button>
             </fieldset>
@@ -487,22 +491,23 @@ export function NodeRow({
             </p>
           ) : (
             <section aria-label={`Choices for ${node.id}`}>
+              <p className={styles.choicesSectionLabel} aria-hidden="true">Choices</p>
               {node.choices.length > 0 && (
-                <ul>
+                <ul className={styles.choicesList}>
                   {node.choices.map((c, i) => (
                     <ChoiceRow
                       key={i}
                       nodeId={node.id}
                       choice={c}
                       choiceIndex={i}
-                      allNodeIds={allNodeIds}
+                      allNodes={allNodes}
                       onNewNodeCreated={onNewNodeCreated}
                       onAnnounce={onAnnounce}
                     />
                   ))}
                 </ul>
               )}
-              <button type="button" onClick={handleAddChoice}>
+              <button type="button" className={styles.addButton} onClick={handleAddChoice}>
                 Add choice
               </button>
             </section>

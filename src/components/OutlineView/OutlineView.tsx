@@ -152,8 +152,8 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     setFocusTargetId(id)
   }, [addNode])
 
-  // ---- allNodeIds — stable list for ChoiceRow selects --------------------
-  const allNodeIds = useMemo(() => document.map((n) => n.id), [document])
+  // ---- allNodes — stable list for ChoiceRow selects (id + title pairs) --
+  const allNodes = useMemo(() => document.map((n) => ({ id: n.id, title: n.title })), [document])
 
   // ---- Audio suggestions — unique filenames across the document ----------
   const audioSuggestions = useMemo(
@@ -245,7 +245,7 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
               audioSuggestions={audioSuggestions}
               onAnnounce={announce}
               onChoicesCleared={handleChoicesCleared}
-              allNodeIds={allNodeIds}
+              allNodes={allNodes}
               onNewNodeCreated={handleNewNodeCreated}
               focusTitleOnMount={focusTargetId === node.id}
               onFocusApplied={handleFocusApplied}

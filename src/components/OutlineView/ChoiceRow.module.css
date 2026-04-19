@@ -1,0 +1,52 @@
+.item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.field input[type="text"],
+.field select {
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.danglingHint {
+  font-size: 0.78rem;
+  color: #b45309;
+  margin-top: 3px;
+}
+
+.deleteButton {
+  padding: 4px 8px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.deleteButton:hover {
+  background: #fef2f2;
+}

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useId } from 'react'
 import type { Choice } from '../../types/adventure'
 import { useAdventureStore } from '../../store/StoreContext'
+import styles from './ChoiceRow.module.css'
 
 /**
  * Sentinel value used as the `<option value>` for the "Create new node"
@@ -13,8 +14,8 @@ export interface ChoiceRowProps {
   nodeId: string
   choice: Choice
   choiceIndex: number
-  /** Every node id present in the document, used to populate the nextNode select. */
-  allNodeIds: ReadonlyArray<string>
+  /** Every node in the document (id + title), used to populate the nextNode select. */
+  allNodes: ReadonlyArray<{ id: string; title: string }>
   /**
    * Called after `createNodeAndLinkChoice` completes so the parent can move
    * keyboard focus to the new node's title field.
@@ -42,7 +43,7 @@ export function ChoiceRow({
   nodeId,
   choice,
   choiceIndex,
-  allNodeIds,
+  allNodes,
   onNewNodeCreated,
   onAnnounce,
 }: ChoiceRowProps) {
@@ -100,11 +101,11 @@ export function ChoiceRow({
   }, [nodeId, choiceIndex, deleteChoice, onAnnounce])
 
   // A nextNode is dangling when it is non-empty but not present in the document.
-  const isDangling = choice.nextNode !== '' && !allNodeIds.includes(choice.nextNode)
+  const isDangling = choice.nextNode !== '' && !allNodes.some((n) => n.id === choice.nextNode)
 
   return (
-    <li>
-      <div>
+    <li className={styles.item}>
+      <div className={styles.field}>
         <label htmlFor={choiceTextId}>Choice text</label>
         <input
           id={choiceTextId}
@@ -115,7 +116,7 @@ export function ChoiceRow({
         />
       </div>
 
-      <div>
+      <div className={styles.field}>
         <label htmlFor={constraintId}>Response constraint</label>
         <input
           id={constraintId}
@@ -126,7 +127,7 @@ export function ChoiceRow({
         />
       </div>
 
-      <div>
+      <div className={styles.field}>
         <label htmlFor={nextNodeId}>Next node</label>
         <select
           id={nextNodeId}
@@ -144,21 +145,21 @@ export function ChoiceRow({
           {isDangling && (
             <option value={choice.nextNode}>{choice.nextNode} (not found)</option>
           )}
-          {allNodeIds.map((id) => (
-            <option key={id} value={id}>
-              {id}
+          {allNodes.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.title || n.id}
             </option>
           ))}
         </select>
 
         {isDangling && (
-          <span id={danglingHintId}>
+          <span id={danglingHintId} className={styles.danglingHint}>
             Node &ldquo;{choice.nextNode}&rdquo; no longer exists.
           </span>
         )}
       </div>
 
-      <button type="button" onClick={handleDelete}>
+      <button type="button" className={styles.deleteButton} onClick={handleDelete}>
         Delete choice
       </button>
     </li>
