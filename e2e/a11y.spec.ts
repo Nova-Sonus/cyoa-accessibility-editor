@@ -182,8 +182,8 @@ test.describe('axe-core — outline view', () => {
 
   test('no violations with expanded node details', async ({ page }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
-    // Open the first node's details element
-    await page.locator('details').first().click()
+    // Open the first node's accordion
+    await page.locator('ul[aria-label="Adventure outline"] > li > button[aria-expanded]').first().click()
     await page.waitForTimeout(100)
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
