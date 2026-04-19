@@ -154,10 +154,10 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 | 11 | OPS-535 | Concrete repository (LocalFile or Supabase) | Done |
 | 12 | OPS-538 | Design tokens and shared UI component library | Done |
 | 13 | OPS-539 | App chrome — header, legend bar, and view toggle | Done |
-| 14 | OPS-540 | Node card visual redesign, stats bar, and Add Node | — |
+| 14 | OPS-540 | Node card visual redesign, stats bar, and Add Node | Done |
 | 15 | OPS-541 | Two-column layout and sidebar widgets | — |
 | 16 | OPS-542 | Open adventure — selection dialog and metadata index | — |
 | 17 | OPS-537 | TTS preview of narrativeText via Web Speech API | — |
 | 18 | OPS-536 | Accessibility audit and JAWS validation | — |
 
-Implementation order: 538 → 539 → 540 → 541 → 542 → 537 → 536. OPS-540 is next. OPS-537 is unblocked once the TTS placeholder button lands in OPS-540. OPS-536 runs last when the full visual shell is in place.
+Implementation order: 538 → 539 → 540 → 541 → 542 → 537 → 536. OPS-541 is next. OPS-537 is unblocked (TTS placeholder button landed in OPS-540). OPS-536 runs last when the full visual shell is in place.
