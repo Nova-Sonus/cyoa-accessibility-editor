@@ -2,8 +2,10 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import { deriveIssues } from '../IssuesPanel/deriveIssues'
 import { IssuesPanel } from '../IssuesPanel/IssuesPanel'
-import { AssetManifest } from '../AssetManifest'
+import { AssetManifest, deriveAssetManifest } from '../AssetManifest'
 import { NodeRow } from './NodeRow'
+import { TERMINAL_NODE_TYPES } from '../../types/adventure'
+import styles from './OutlineView.module.css'
 
 interface OutlineViewProps {
   /**
@@ -33,37 +35,13 @@ const visuallyHiddenStyle: React.CSSProperties = {
   borderWidth: 0,
 }
 
-/**
- * Outline view — a keyboard-navigable, screen-reader-friendly list of all
- * adventure nodes.  Covers title, node_type, narrativeText, and full choice
- * editing with a nextNode select that includes a "Create new node" affordance.
- *
- * Design decisions:
- * - Single `aria-live="polite" aria-atomic="true"` region prevents announcement
- *   storms when multiple fields change in quick succession.
- * - Semantic HTML only (`<ul>`, `<details>`, `<textarea>`, `<select>`,
- *   `<button>`, `<label>`) — no `role="application"`.
- * - Issues panel is always visible; it shows a "No issues found" message when
- *   the document is structurally clean, satisfying OPS-531 AC.
- * - All issues are derived reactively from the live document and classifierCache
- *   on every render — a single store mutation surfaces its consequences within
- *   one render cycle.
- * - Consolidated aria-live region announces the issue count when it changes,
- *   not once per issue — prevents announcement storms.
- * - Focus management: activating an issue item, or creating a stub node via the
- *   nextNode combobox, moves focus to the target node's title field.
- * - Repository errors (e.g. schema-invalid save) are caught here and surfaced
- *   in the IssuesPanel via the repositoryError prop — satisfies OPS-535 AC.
- */
 export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps = {}) {
   const document = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
   const saveAdventure = useAdventureStore((s) => s.saveAdventure)
+  const addNode = useAdventureStore((s) => s.addNode)
 
   // ---- Announcement state -------------------------------------------------
-  // Clear-then-set pattern ensures identical messages re-trigger screen reader
-  // announcement.  The 50 ms gap is below perception threshold for sighted
-  // users but sufficient for browser accessibility APIs to fire a mutation.
   const [announcement, setAnnouncement] = useState('')
   const announcerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -78,18 +56,12 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
   }, [])
 
   // ---- Reactive issues — derived from document + classifierCache ----------
-  // A single useMemo replaces the previous combination of event-driven
-  // terminalIssues state and danglingIssues memo.  All issue categories
-  // (orphan, unreachable, dangling-reference, terminal-with-choices) are now
-  // computed in one pass and reflect the live document within one render cycle.
   const issues = useMemo(
     () => deriveIssues(document, classifierCache),
     [document, classifierCache],
   )
 
   // ---- aria-live count announcement ---------------------------------------
-  // Announce the new issue count whenever it changes, but only after the
-  // initial render (when the user has not yet interacted with the document).
   const prevIssueCountRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -97,7 +69,6 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     const prev = prevIssueCountRef.current
 
     if (prev === null) {
-      // First render — record the baseline without announcing.
       prevIssueCountRef.current = count
       return
     }
@@ -116,11 +87,6 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
   }, [issues.length, announce])
 
   // ---- Terminal-transition announcement -----------------------------------
-  // When a node transitions to a terminal type the store clears any pre-existing
-  // choices in the same transaction — the document is never transiently invalid.
-  // Because choices are cleared the reactive issues list won't flag the node,
-  // so we surface the event as a one-off announcement instead of a persistent
-  // issue entry.
   const handleChoicesCleared = useCallback(
     (nodeId: string, count: number) => {
       const node = document.find((n) => n.id === nodeId)
@@ -153,9 +119,6 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
   // ---- Focus management — new node or issue activation -------------------
   const [focusTargetId, setFocusTargetId] = useState<string | null>(null)
 
-  // When a focusNodeId is passed in from the parent (e.g. canvas node activation),
-  // apply it as the focus target once and notify the parent so the prop can be
-  // cleared for future activations.
   useEffect(() => {
     if (focusNodeId) {
       setFocusTargetId(focusNodeId)
@@ -175,8 +138,38 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     setFocusTargetId(null)
   }, [])
 
+  // ---- Add node -----------------------------------------------------------
+  const handleAddNode = useCallback(() => {
+    const id = crypto.randomUUID()
+    addNode({
+      id,
+      title: 'New node',
+      node_type: 'narrative',
+      narrativeText: '',
+      choices: [],
+    })
+    setFocusTargetId(id)
+  }, [addNode])
+
   // ---- allNodeIds — stable list for ChoiceRow selects --------------------
   const allNodeIds = useMemo(() => document.map((n) => n.id), [document])
+
+  // ---- Audio suggestions — unique filenames across the document ----------
+  const audioSuggestions = useMemo(
+    () => deriveAssetManifest(document).map((e) => e.filename),
+    [document],
+  )
+
+  // ---- Stats — derived from document + classifierCache -------------------
+  const stats = useMemo(() => {
+    const totalNodes = document.length
+    const totalChoices = document.reduce((sum, n) => sum + n.choices.length, 0)
+    const checkpoints = document.filter((n) => classifierCache.get(n.id)?.isCheckpoint).length
+    const terminals = document.filter((n) =>
+      TERMINAL_NODE_TYPES.includes(n.node_type),
+    ).length
+    return { totalNodes, totalChoices, checkpoints, terminals }
+  }, [document, classifierCache])
 
   // ---- Empty state --------------------------------------------------------
   if (document.length === 0) {
@@ -186,7 +179,7 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
   return (
     <div>
       {/*
-       * Consolidated aria-live region.  All field-commit and count-change
+       * Consolidated aria-live region. All field-commit and count-change
        * announcements are routed here so only one region fires per interaction.
        */}
       <div
@@ -198,11 +191,43 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
         {announcement}
       </div>
 
+      {/* Stats bar */}
+      <section aria-label="Document statistics" className={styles.statsBar}>
+        <div className={styles.stat}>
+          <span className={styles.statValue}>{stats.totalNodes}</span>
+          <span className={styles.statLabel}>{stats.totalNodes === 1 ? 'node' : 'nodes'}</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statValue}>{stats.totalChoices}</span>
+          <span className={styles.statLabel}>{stats.totalChoices === 1 ? 'choice' : 'choices'}</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statValue}>{stats.checkpoints}</span>
+          <span className={styles.statLabel}>{stats.checkpoints === 1 ? 'checkpoint' : 'checkpoints'}</span>
+        </div>
+        <div className={styles.stat}>
+          <span className={styles.statValue}>{stats.terminals}</span>
+          <span className={styles.statLabel}>{stats.terminals === 1 ? 'terminal' : 'terminals'}</span>
+        </div>
+      </section>
+
       <ul aria-label="Adventure outline">
         {document.map((node) => (
           <NodeRow
             key={node.id}
             node={node}
+            tags={classifierCache.get(node.id) ?? {
+              isOrphan: false,
+              isTerminal: false,
+              isJunction: false,
+              isBranch: false,
+              isLinearLink: false,
+              isCheckpoint: false,
+              sceneId: null,
+              depth: Infinity,
+              unreachable: false,
+            }}
+            audioSuggestions={audioSuggestions}
             onAnnounce={announce}
             onChoicesCleared={handleChoicesCleared}
             allNodeIds={allNodeIds}
@@ -212,6 +237,17 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
           />
         ))}
       </ul>
+
+      {/* Add node */}
+      <div className={styles.addNodeWrapper}>
+        <button
+          type="button"
+          className={styles.addNodeButton}
+          onClick={handleAddNode}
+        >
+          + Add node
+        </button>
+      </div>
 
       <button
         type="button"

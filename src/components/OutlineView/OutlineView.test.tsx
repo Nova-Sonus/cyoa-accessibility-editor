@@ -46,13 +46,40 @@ function renderOutline(store: Store) {
   )
 }
 
-/** Open the <details> for the nth node row (0-indexed). */
-function openDetails(container: HTMLElement, index = 0) {
-  const allDetails = container.querySelectorAll('ul[aria-label="Adventure outline"] > li > details')
-  const detail = allDetails[index] as HTMLDetailsElement
-  if (!detail) throw new Error(`No <details> at index ${index}`)
-  detail.open = true
-  return detail
+/**
+ * Returns the <li> element for the nth node row (0-indexed).
+ */
+function getNodeRow(container: HTMLElement, index = 0): HTMLElement {
+  const items = container.querySelectorAll('ul[aria-label="Adventure outline"] > li')
+  const item = items[index] as HTMLElement
+  if (!item) throw new Error(`No node row <li> at index ${index}`)
+  return item
+}
+
+/**
+ * Expands the accordion for the nth node row (0-indexed) by clicking its
+ * header button if not already expanded.  Returns the <li> element.
+ */
+function expandNode(container: HTMLElement, index = 0): HTMLElement {
+  const row = getNodeRow(container, index)
+  const button = row.querySelector('button[aria-expanded]') as HTMLButtonElement
+  if (!button) throw new Error(`No accordion header button in row ${index}`)
+  if (button.getAttribute('aria-expanded') !== 'true') {
+    fireEvent.click(button)
+  }
+  return row
+}
+
+/** Expand every node row in the outline. */
+function expandAllNodes(container: HTMLElement) {
+  const buttons = container.querySelectorAll(
+    'ul[aria-label="Adventure outline"] > li > button[aria-expanded]',
+  )
+  buttons.forEach((btn) => {
+    if (btn.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(btn as HTMLButtonElement)
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -86,16 +113,13 @@ describe('OutlineView — accessibility', () => {
     ])
     const { container } = renderOutline(store)
 
-    // Open all rows so inner controls are in the accessibility tree.
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })
 
   it('has no axe violations with the issues panel showing structural issues', async () => {
-    // An orphan node triggers the issues panel.
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start' }),
       makeNode('orphan'),
@@ -121,11 +145,10 @@ describe('OutlineView — semantic HTML', () => {
   it('uses only permitted semantic elements', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
-    // Required elements must be present.
     expect(container.querySelector('ul')).not.toBeNull()
-    expect(container.querySelector('details')).not.toBeNull()
+    expect(container.querySelector('button[aria-expanded]')).not.toBeNull()
     expect(container.querySelector('textarea')).not.toBeNull()
     expect(container.querySelector('select')).not.toBeNull()
   })
@@ -139,7 +162,7 @@ describe('OutlineView — node type select', () => {
   it('lists all eight node types in the select element', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const select = screen.getByLabelText('Node type') as HTMLSelectElement
     const optionValues = Array.from(select.options).map((o) => o.value)
@@ -155,7 +178,7 @@ describe('OutlineView — title editing', () => {
   it('commits title to store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { title: 'Old Title' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const input = screen.getByLabelText('Title') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'New Title' } })
@@ -167,7 +190,7 @@ describe('OutlineView — title editing', () => {
   it('trims whitespace before committing title', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { title: 'Original' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const input = screen.getByLabelText('Title') as HTMLInputElement
     fireEvent.change(input, { target: { value: '  Trimmed  ' } })
@@ -179,13 +202,12 @@ describe('OutlineView — title editing', () => {
   it('does not dispatch an update when title is unchanged', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { title: 'Same' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
-    // Store document reference before blur
     const docBefore = store.getState().document
 
     const input = screen.getByLabelText('Title') as HTMLInputElement
-    fireEvent.blur(input) // no change
+    fireEvent.blur(input)
 
     expect(store.getState().document).toBe(docBefore)
   })
@@ -199,7 +221,7 @@ describe('OutlineView — narrative text editing', () => {
   it('commits narrativeText to store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { narrativeText: 'Old text' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const textarea = screen.getByLabelText('Narrative text') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: 'New text' } })
@@ -211,7 +233,7 @@ describe('OutlineView — narrative text editing', () => {
   it('does not dispatch when narrativeText is unchanged on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { narrativeText: 'Unchanged' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const docBefore = store.getState().document
     const textarea = screen.getByLabelText('Narrative text') as HTMLTextAreaElement
@@ -229,7 +251,7 @@ describe('OutlineView — node type change', () => {
   it('commits node_type change to store on select change', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'narrative' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const select = screen.getByLabelText('Node type') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'decision' } })
@@ -246,7 +268,7 @@ describe('OutlineView — terminal node choices section', () => {
   it('hides choices section when node_type is "end"', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'end' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
   })
@@ -256,7 +278,7 @@ describe('OutlineView — terminal node choices section', () => {
       makeNode('n1', { node_type: 'adventure_success' }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
   })
@@ -264,7 +286,7 @@ describe('OutlineView — terminal node choices section', () => {
   it('shows choices section for non-terminal node', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'narrative' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).not.toBeNull()
   })
@@ -272,7 +294,7 @@ describe('OutlineView — terminal node choices section', () => {
   it('hides choices section after transitioning to a terminal type', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'narrative' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).not.toBeNull()
 
@@ -309,19 +331,15 @@ describe('OutlineView — issues panel always visible', () => {
   })
 
   it('shows "No issues found" when a childless node transitions to terminal type', async () => {
-    // n1 (start) → n2 (narrative): fully connected, 0 initial issues.
-    // Transitioning n2 to 'end' with no choices leaves no structural issues.
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start', choices: [makeChoice('n2')] }),
       makeNode('n2', { node_type: 'narrative' }),
     ])
     const { container } = renderOutline(store)
-    const n2Details = openDetails(container, 1) // open n2's row
+    const n2Row = expandNode(container, 1)
 
-    // Scope the query to n2's details to avoid ambiguity with n1's "Node type" select.
-    fireEvent.change(within(n2Details).getByLabelText('Node type'), { target: { value: 'end' } })
+    fireEvent.change(within(n2Row).getByLabelText('Node type'), { target: { value: 'end' } })
 
-    // Store cleared choices (none existed); no structural issue remains.
     expect(screen.getByText(/No issues found/i)).toBeTruthy()
   })
 })
@@ -332,25 +350,20 @@ describe('OutlineView — issues panel always visible', () => {
 
 describe('OutlineView — terminal transition choices-cleared announcement', () => {
   it('fires the choices-cleared announce path and surfaces an issue count in the live region', async () => {
-    // n1 (start) has 2 choices — the store clears them on terminal transition.
-    // Clearing choices makes n1, n2, n3 all orphans (3 new issues), so the
-    // debounced count-change announcement ("3 issues found") fires after the
-    // choices-cleared announcement — both code paths are exercised.
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start', choices: [makeChoice('n2'), makeChoice('n3')] }),
       makeNode('n2', { node_type: 'end' }),
       makeNode('n3', { node_type: 'end' }),
     ])
     const { container } = renderOutline(store)
-    const n1Details = openDetails(container)
+    const n1Row = expandNode(container, 0)
 
     vi.useFakeTimers()
     try {
-      fireEvent.change(within(n1Details).getByLabelText('Node type'), { target: { value: 'end' } })
+      fireEvent.change(within(n1Row).getByLabelText('Node type'), { target: { value: 'end' } })
 
       await act(async () => { vi.advanceTimersByTime(100) })
 
-      // The count-change announcement wins the debounce: 3 orphan issues created.
       expect(screen.getByRole('status').textContent).toMatch(/3 issues found/i)
     } finally {
       vi.useRealTimers()
@@ -381,12 +394,10 @@ describe('OutlineView — issues panel: orphan detection', () => {
       makeNode('orphan', { title: 'Lost Node' }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
-    // Verify orphan issue is initially present.
     expect(within(screen.getByRole('region', { name: 'Issues' })).getByText(/Orphan node/i)).toBeTruthy()
 
-    // Add a choice from n1 → orphan.
     act(() => {
       store.getState().addChoice('n1', { choiceText: '', choiceResponseConstraint: '', nextNode: 'orphan' })
     })
@@ -413,7 +424,6 @@ describe('OutlineView — issues panel: dangling reference detection', () => {
     ])
     renderOutline(store)
 
-    // n2 is deleted — n1's choice now dangles. Wrap in act() so React flushes.
     act(() => {
       store.getState().deleteNode('n2')
     })
@@ -423,25 +433,19 @@ describe('OutlineView — issues panel: dangling reference detection', () => {
   })
 
   it('removes the dangling issue after the choice nextNode is updated to a valid target', async () => {
-    // n1 (start, →n2), n2 (end), n3 (end, initially orphan).
-    // After deleting n2 and pointing n1 → n3, n3 gains an incoming edge from the
-    // reachable start node — all issues resolve.
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start', choices: [makeChoice('n2')] }),
       makeNode('n2', { node_type: 'end' }),
       makeNode('n3', { node_type: 'end' }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container) // open n1 (start) — it owns the choice to fix
+    expandNode(container)
 
-    // Delete n2 to create a dangling reference (n3 is also an orphan at this point).
     act(() => {
       store.getState().deleteNode('n2')
     })
     expect(screen.getByRole('region', { name: 'Issues' })).toBeTruthy()
 
-    // Fix the dangling reference: point n1 → n3.
-    // n3 now has an incoming edge from the start node — no more orphan or dangling.
     fireEvent.change(screen.getByLabelText('Next node'), { target: { value: 'n3' } })
 
     expect(screen.getByText(/No issues found/i)).toBeTruthy()
@@ -453,7 +457,7 @@ describe('OutlineView — issues panel: dangling reference detection', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     act(() => {
       store.getState().deleteNode('n2')
@@ -470,26 +474,24 @@ describe('OutlineView — issues panel: dangling reference detection', () => {
 // ---------------------------------------------------------------------------
 
 describe('OutlineView — issues panel: focus activation', () => {
-  it('opens the node details and focuses the title field when an issue is activated', async () => {
+  it('opens the node accordion and focuses the title field when an issue is activated', async () => {
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start' }),
       makeNode('orphan', { title: 'Lost Node' }),
     ])
     const { container } = renderOutline(store)
 
-    // The issues panel should show the orphan issue.
     const issuesSection = screen.getByRole('region', { name: 'Issues' })
     const activateButton = within(issuesSection).getByRole('button')
 
     fireEvent.click(activateButton)
 
-    // The orphan node's <details> should now be open.
-    const allDetails = container.querySelectorAll(
-      'ul[aria-label="Adventure outline"] > li > details',
+    // The orphan node's accordion header should now be expanded.
+    const allButtons = container.querySelectorAll(
+      'ul[aria-label="Adventure outline"] > li > button[aria-expanded]',
     )
-    // Find the details for 'orphan' (second node).
-    const orphanDetails = allDetails[1] as HTMLDetailsElement
-    expect(orphanDetails.open).toBe(true)
+    const orphanButton = allButtons[1] as HTMLButtonElement
+    expect(orphanButton.getAttribute('aria-expanded')).toBe('true')
 
     // Focus should be on the orphan node's title input.
     const focusedElement = container.ownerDocument.activeElement
@@ -504,22 +506,18 @@ describe('OutlineView — issues panel: focus activation', () => {
 
 describe('OutlineView — aria-live issue count announcements', () => {
   it('announces count when a new issue appears', async () => {
-    // Start with a clean document (0 issues) so the count change is 0 → 1.
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start', choices: [makeChoice('n2')] }),
       makeNode('n2', { node_type: 'end' }),
     ])
     renderOutline(store)
 
-    // Replace real setTimeout with fake timers AFTER async store setup.
     vi.useFakeTimers()
     try {
-      // Delete n2 — creates a dangling reference (count 0 → 1).
       act(() => {
         store.getState().deleteNode('n2')
       })
 
-      // Advance past the 50 ms debounce so the announcement fires.
       await act(async () => {
         vi.advanceTimersByTime(100)
       })
@@ -531,7 +529,6 @@ describe('OutlineView — aria-live issue count announcements', () => {
   })
 
   it('announces "No issues" when all issues are resolved', async () => {
-    // Start with a clean document (0 issues).
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'start', choices: [makeChoice('n2')] }),
       makeNode('n2', { node_type: 'end' }),
@@ -540,13 +537,11 @@ describe('OutlineView — aria-live issue count announcements', () => {
 
     vi.useFakeTimers()
     try {
-      // Delete n2 to introduce a dangling reference (0 → 1 issue).
       act(() => {
         store.getState().deleteNode('n2')
       })
       await act(async () => { vi.advanceTimersByTime(100) })
 
-      // Clear the dangling reference by setting nextNode to '' (1 → 0 issues).
       act(() => {
         store.getState().updateChoice('n1', 0, { nextNode: '' })
       })
@@ -610,7 +605,7 @@ describe('OutlineView — choice editing: add / delete', () => {
   it('shows "Add choice" button for non-terminal nodes', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'narrative' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(screen.getByRole('button', { name: 'Add choice' })).toBeTruthy()
   })
@@ -618,7 +613,7 @@ describe('OutlineView — choice editing: add / delete', () => {
   it('adds a choice to the store when "Add choice" is clicked', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'decision' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     fireEvent.click(screen.getByRole('button', { name: 'Add choice' }))
 
@@ -632,9 +627,8 @@ describe('OutlineView — choice editing: add / delete', () => {
       makeNode('n3'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
-    // Each choice row renders a "Delete choice" button.
     expect(screen.getAllByRole('button', { name: 'Delete choice' })).toHaveLength(2)
   })
 
@@ -645,7 +639,7 @@ describe('OutlineView — choice editing: add / delete', () => {
       makeNode('n3'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete choice' })
     fireEvent.click(deleteButtons[0]!)
@@ -661,7 +655,7 @@ describe('OutlineView — choice editing: choiceText field', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const choiceTextInput = screen.getByLabelText('Choice text') as HTMLInputElement
     fireEvent.change(choiceTextInput, { target: { value: 'Go north' } })
@@ -676,7 +670,7 @@ describe('OutlineView — choice editing: choiceText field', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const docBefore = store.getState().document
     fireEvent.blur(screen.getByLabelText('Choice text'))
@@ -693,7 +687,7 @@ describe('OutlineView — choice editing: nextNode select', () => {
       makeNode('n3'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const select = screen.getByLabelText('Next node') as HTMLSelectElement
     const optionValues = Array.from(select.options).map((o) => o.value)
@@ -709,7 +703,7 @@ describe('OutlineView — choice editing: nextNode select', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const select = screen.getByLabelText('Next node') as HTMLSelectElement
     const optionValues = Array.from(select.options).map((o) => o.value)
@@ -723,7 +717,7 @@ describe('OutlineView — choice editing: nextNode select', () => {
       makeNode('n3'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     fireEvent.change(screen.getByLabelText('Next node'), { target: { value: 'n3' } })
 
@@ -736,24 +730,24 @@ describe('OutlineView — choice editing: nextNode select', () => {
 // ---------------------------------------------------------------------------
 
 describe('OutlineView — terminal node accessible message', () => {
-  it('renders an explanation paragraph for "end" nodes instead of the choices section', async () => {
+  it('renders an info box for "end" nodes instead of the choices section', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'end' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
-    expect(screen.getByText(/Choices are not available for terminal nodes/i)).toBeTruthy()
+    expect(screen.getByText(/Terminal node — choices are not permitted on end nodes/i)).toBeTruthy()
   })
 
-  it('renders an explanation paragraph for "adventure_success" nodes', async () => {
+  it('renders an info box for "adventure_success" nodes', async () => {
     const store = await makeStoreWithNodes([
       makeNode('n1', { node_type: 'adventure_success' }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(container.querySelector('section[aria-label^="Choices"]')).toBeNull()
-    expect(screen.getByText(/Choices are not available for terminal nodes/i)).toBeTruthy()
+    expect(screen.getByText(/Terminal node — choices are not permitted on adventure_success nodes/i)).toBeTruthy()
   })
 })
 
@@ -768,7 +762,7 @@ describe('OutlineView — create new node via nextNode combobox', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     fireEvent.change(screen.getByLabelText('Next node'), {
       target: { value: CREATE_NEW_NODE_VALUE },
@@ -778,27 +772,26 @@ describe('OutlineView — create new node via nextNode combobox', () => {
     const newNode = store.getState().document[2]!
     expect(newNode.title).toBe('New node')
     expect(newNode.node_type).toBe('narrative')
-    // The choice must now point to the new stub node.
     expect(store.getState().document[0]?.choices[0]?.nextNode).toBe(newNode.id)
   })
 
-  it('opens the new node row and focuses its title field after creation', async () => {
+  it('opens the new node accordion and focuses its title field after creation', async () => {
     const store = await makeStoreWithNodes([
-      makeNode('n1', { choices: [makeChoice('') ] }),
+      makeNode('n1', { choices: [makeChoice('')] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     fireEvent.change(screen.getByLabelText('Next node'), {
       target: { value: CREATE_NEW_NODE_VALUE },
     })
 
-    // The new node row should have its <details> opened.
-    const allDetails = container.querySelectorAll(
-      'ul[aria-label="Adventure outline"] > li > details',
+    // The new node row's accordion header should be expanded.
+    const allButtons = container.querySelectorAll(
+      'ul[aria-label="Adventure outline"] > li > button[aria-expanded]',
     )
-    const newNodeDetails = allDetails[1] as HTMLDetailsElement
-    expect(newNodeDetails.open).toBe(true)
+    const newNodeButton = allButtons[1] as HTMLButtonElement
+    expect(newNodeButton.getAttribute('aria-expanded')).toBe('true')
 
     // Focus should be on the new node's title input.
     const focusedElement = container.ownerDocument.activeElement
@@ -819,9 +812,7 @@ describe('OutlineView — accessibility with choices', () => {
       makeNode('n3'),
     ])
     const { container } = renderOutline(store)
-
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
@@ -833,9 +824,7 @@ describe('OutlineView — accessibility with choices', () => {
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     store.getState().deleteNode('n2')
 
@@ -852,7 +841,10 @@ describe('OutlineView — audio fields: render', () => {
   it('renders Entry foley, Music, and Ambient sounds inputs when a node is expanded', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    // Audio section is collapsed by default; expand the node then the audio section.
+    const row = expandNode(container)
+    const audioToggle = within(row).getByRole('button', { name: /Audio/i })
+    fireEvent.click(audioToggle)
 
     expect(screen.getByLabelText('Entry foley')).toBeTruthy()
     expect(screen.getByLabelText('Music')).toBeTruthy()
@@ -864,7 +856,9 @@ describe('OutlineView — audio fields: render', () => {
       makeNode('n1', { entry_foley: 'cave.mp3', music: 'theme.ogg', sounds: 'wind.mp3' }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    const row = expandNode(container)
+    const audioToggle = within(row).getByRole('button', { name: /Audio/i })
+    fireEvent.click(audioToggle)
 
     expect((screen.getByLabelText('Entry foley') as HTMLInputElement).value).toBe('cave.mp3')
     expect((screen.getByLabelText('Music') as HTMLInputElement).value).toBe('theme.ogg')
@@ -874,7 +868,9 @@ describe('OutlineView — audio fields: render', () => {
   it('shows empty audio inputs when fields are absent from the node', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    const row = expandNode(container)
+    const audioToggle = within(row).getByRole('button', { name: /Audio/i })
+    fireEvent.click(audioToggle)
 
     expect((screen.getByLabelText('Entry foley') as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText('Music') as HTMLInputElement).value).toBe('')
@@ -883,10 +879,17 @@ describe('OutlineView — audio fields: render', () => {
 })
 
 describe('OutlineView — audio fields: commit on blur', () => {
+  function expandAudio(container: HTMLElement, index = 0) {
+    const row = expandNode(container, index)
+    const audioToggle = within(row).getByRole('button', { name: /Audio/i })
+    fireEvent.click(audioToggle)
+    return row
+  }
+
   it('commits entry_foley to store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandAudio(container)
 
     fireEvent.change(screen.getByLabelText('Entry foley'), { target: { value: 'drip.mp3' } })
     fireEvent.blur(screen.getByLabelText('Entry foley'))
@@ -897,7 +900,7 @@ describe('OutlineView — audio fields: commit on blur', () => {
   it('commits music to store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandAudio(container)
 
     fireEvent.change(screen.getByLabelText('Music'), { target: { value: 'boss.ogg' } })
     fireEvent.blur(screen.getByLabelText('Music'))
@@ -908,7 +911,7 @@ describe('OutlineView — audio fields: commit on blur', () => {
   it('commits sounds to store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandAudio(container)
 
     fireEvent.change(screen.getByLabelText('Ambient sounds'), { target: { value: 'rain.mp3' } })
     fireEvent.blur(screen.getByLabelText('Ambient sounds'))
@@ -919,7 +922,7 @@ describe('OutlineView — audio fields: commit on blur', () => {
   it('does not dispatch when entry_foley is unchanged on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { entry_foley: 'existing.mp3' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandAudio(container)
 
     const docBefore = store.getState().document
     fireEvent.blur(screen.getByLabelText('Entry foley'))
@@ -930,7 +933,7 @@ describe('OutlineView — audio fields: commit on blur', () => {
   it('clears entry_foley field (sets to undefined) when value is blanked', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { entry_foley: 'cave.mp3' })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandAudio(container)
 
     fireEvent.change(screen.getByLabelText('Entry foley'), { target: { value: '' } })
     fireEvent.blur(screen.getByLabelText('Entry foley'))
@@ -945,9 +948,7 @@ describe('OutlineView — audio fields: accessibility', () => {
       makeNode('n1', { entry_foley: 'cave.mp3', music: 'theme.ogg', sounds: 'wind.mp3' }),
     ])
     const { container } = renderOutline(store)
-
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
@@ -979,20 +980,24 @@ describe('OutlineView — asset manifest panel', () => {
     ])
     renderOutline(store)
 
-    expect(screen.getByText('theme.ogg')).toBeTruthy()
+    const manifest = screen.getByRole('region', { name: 'Asset manifest' })
+    expect(within(manifest).getByText('theme.ogg')).toBeTruthy()
   })
 
   it('updates the manifest when an audio field is committed', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    const row = expandNode(container)
+    const audioToggle = within(row).getByRole('button', { name: /Audio/i })
+    fireEvent.click(audioToggle)
 
     expect(screen.getByText(/No audio assets referenced/i)).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Music'), { target: { value: 'new_track.ogg' } })
     fireEvent.blur(screen.getByLabelText('Music'))
 
-    expect(screen.getByText('new_track.ogg')).toBeTruthy()
+    const manifest = screen.getByRole('region', { name: 'Asset manifest' })
+    expect(within(manifest).getByText('new_track.ogg')).toBeTruthy()
   })
 
   it('has no axe violations with the asset manifest visible', async () => {
@@ -1017,7 +1022,7 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect(screen.getByLabelText('Response constraint')).toBeTruthy()
   })
@@ -1030,7 +1035,7 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     expect((screen.getByLabelText('Response constraint') as HTMLInputElement).value).toBe('strength >= 10')
   })
@@ -1041,7 +1046,7 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     fireEvent.change(screen.getByLabelText('Response constraint'), { target: { value: 'dexterity > 5' } })
     fireEvent.blur(screen.getByLabelText('Response constraint'))
@@ -1057,7 +1062,7 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandNode(container)
 
     const docBefore = store.getState().document
     fireEvent.blur(screen.getByLabelText('Response constraint'))
@@ -1092,8 +1097,7 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
       makeNode('n2'),
     ])
     const { container } = renderOutline(store)
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
@@ -1105,10 +1109,17 @@ describe('OutlineView — choice editing: choiceResponseConstraint field', () =>
 // ---------------------------------------------------------------------------
 
 describe('OutlineView — checkpoint toggle', () => {
-  it('renders the Checkpoint checkbox when a node is expanded', async () => {
+  function expandGameplay(container: HTMLElement, index = 0) {
+    const row = expandNode(container, index)
+    const gameplayToggle = within(row).getByRole('button', { name: /Gameplay/i })
+    fireEvent.click(gameplayToggle)
+    return row
+  }
+
+  it('renders the Checkpoint checkbox when Gameplay section is expanded', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect(screen.getByLabelText('Checkpoint')).toBeTruthy()
   })
@@ -1116,7 +1127,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('is unchecked by default when checkpoint is absent from the node', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect((screen.getByLabelText('Checkpoint') as HTMLInputElement).checked).toBe(false)
   })
@@ -1124,7 +1135,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('is checked when checkpoint is true in the document', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect((screen.getByLabelText('Checkpoint') as HTMLInputElement).checked).toBe(true)
   })
@@ -1132,7 +1143,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('commits checkpoint: true to the store when checked', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByLabelText('Checkpoint'))
 
@@ -1142,7 +1153,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('commits checkpoint: false to the store when unchecked', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByLabelText('Checkpoint'))
 
@@ -1152,7 +1163,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('classifier re-tags the node as isCheckpoint after enabling checkpoint', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect(store.getState().classifierCache.get('n1')?.isCheckpoint).toBe(false)
 
@@ -1164,8 +1175,7 @@ describe('OutlineView — checkpoint toggle', () => {
   it('has no axe violations with the checkpoint checkbox visible', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { checkpoint: true })])
     const { container } = renderOutline(store)
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
@@ -1177,10 +1187,17 @@ describe('OutlineView — checkpoint toggle', () => {
 // ---------------------------------------------------------------------------
 
 describe('OutlineView — activities editor: render', () => {
+  function expandGameplay(container: HTMLElement, index = 0) {
+    const row = expandNode(container, index)
+    const gameplayToggle = within(row).getByRole('button', { name: /Gameplay/i })
+    fireEvent.click(gameplayToggle)
+    return row
+  }
+
   it('renders the Activities fieldset when a node is expanded', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect(screen.getByRole('group', { name: 'Activities' })).toBeTruthy()
   })
@@ -1188,7 +1205,7 @@ describe('OutlineView — activities editor: render', () => {
   it('renders an "Add activity" button', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect(screen.getByRole('button', { name: 'Add activity' })).toBeTruthy()
   })
@@ -1198,7 +1215,7 @@ describe('OutlineView — activities editor: render', () => {
       makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect((screen.getByLabelText('Activity 1') as HTMLInputElement).value).toBe('Roll dice')
     expect((screen.getByLabelText('Activity 2') as HTMLInputElement).value).toBe('Pick lock')
@@ -1207,17 +1224,24 @@ describe('OutlineView — activities editor: render', () => {
   it('shows no activity inputs when activities is absent', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     expect(screen.queryByLabelText('Activity 1')).toBeNull()
   })
 })
 
 describe('OutlineView — activities editor: add and remove', () => {
+  function expandGameplay(container: HTMLElement, index = 0) {
+    const row = expandNode(container, index)
+    const gameplayToggle = within(row).getByRole('button', { name: /Gameplay/i })
+    fireEvent.click(gameplayToggle)
+    return row
+  }
+
   it('adds a new activity input when "Add activity" is clicked', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }))
 
@@ -1227,7 +1251,7 @@ describe('OutlineView — activities editor: add and remove', () => {
   it('commits new activity text to the store on blur', async () => {
     const store = await makeStoreWithNodes([makeNode('n1')])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }))
     fireEvent.change(screen.getByLabelText('Activity 1'), { target: { value: 'Solve puzzle' } })
@@ -1241,7 +1265,7 @@ describe('OutlineView — activities editor: add and remove', () => {
       makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove activity 1' }))
 
@@ -1251,7 +1275,7 @@ describe('OutlineView — activities editor: add and remove', () => {
   it('sets activities to undefined when the last entry is removed', async () => {
     const store = await makeStoreWithNodes([makeNode('n1', { activities: ['Roll dice'] })])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove activity 1' }))
 
@@ -1260,12 +1284,19 @@ describe('OutlineView — activities editor: add and remove', () => {
 })
 
 describe('OutlineView — activities editor: keyboard reorder', () => {
+  function expandGameplay(container: HTMLElement, index = 0) {
+    const row = expandNode(container, index)
+    const gameplayToggle = within(row).getByRole('button', { name: /Gameplay/i })
+    fireEvent.click(gameplayToggle)
+    return row
+  }
+
   it('moves an activity up with Alt+ArrowUp', async () => {
     const store = await makeStoreWithNodes([
       makeNode('n1', { activities: ['First', 'Second'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.keyDown(screen.getByLabelText('Activity 2'), {
       key: 'ArrowUp',
@@ -1280,7 +1311,7 @@ describe('OutlineView — activities editor: keyboard reorder', () => {
       makeNode('n1', { activities: ['First', 'Second'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     fireEvent.keyDown(screen.getByLabelText('Activity 1'), {
       key: 'ArrowDown',
@@ -1295,7 +1326,7 @@ describe('OutlineView — activities editor: keyboard reorder', () => {
       makeNode('n1', { activities: ['Only', 'Second'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     const docBefore = store.getState().document
     fireEvent.keyDown(screen.getByLabelText('Activity 1'), {
@@ -1311,7 +1342,7 @@ describe('OutlineView — activities editor: keyboard reorder', () => {
       makeNode('n1', { activities: ['First', 'Last'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     const docBefore = store.getState().document
     fireEvent.keyDown(screen.getByLabelText('Activity 2'), {
@@ -1327,7 +1358,7 @@ describe('OutlineView — activities editor: keyboard reorder', () => {
       makeNode('n1', { activities: ['First', 'Second'] }),
     ])
     const { container } = renderOutline(store)
-    openDetails(container)
+    expandGameplay(container)
 
     const docBefore = store.getState().document
     fireEvent.keyDown(screen.getByLabelText('Activity 2'), { key: 'ArrowUp' })
@@ -1342,8 +1373,266 @@ describe('OutlineView — activities editor: accessibility', () => {
       makeNode('n1', { activities: ['Roll dice', 'Pick lock'] }),
     ])
     const { container } = renderOutline(store)
-    const allDetails = container.querySelectorAll('details')
-    allDetails.forEach((d) => ((d as HTMLDetailsElement).open = true))
+    expandAllNodes(container)
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: Accordion expand/collapse (AC2)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: accordion expand/collapse', () => {
+  it('renders the header button with aria-expanded="false" initially', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    const button = container.querySelector(
+      'ul[aria-label="Adventure outline"] > li > button[aria-expanded]',
+    )!
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('sets aria-expanded="true" when the header is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    const row = getNodeRow(container, 0)
+    const button = row.querySelector('button[aria-expanded]') as HTMLButtonElement
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('collapses back to aria-expanded="false" on second click', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+    const row = getNodeRow(container, 0)
+    const button = row.querySelector('button[aria-expanded]') as HTMLButtonElement
+    fireEvent.click(button)
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('has no axe violations when a node is expanded', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'decision' })])
+    const { container } = renderOutline(store)
+    expandNode(container)
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: Stats bar (AC3)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: stats bar', () => {
+  it('shows correct counts for nodes, choices, checkpoints, and terminals', async () => {
+    // 5 nodes, 3 choices, 2 checkpoints, 1 terminal — all distinct counts
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { node_type: 'start', choices: [makeChoice('n2'), makeChoice('n3')] }),
+      makeNode('n2', { choices: [makeChoice('n3')] }),
+      makeNode('n3', { checkpoint: true }),
+      makeNode('n4', { checkpoint: true }),
+      makeNode('n5', { node_type: 'end' }),
+    ])
+    renderOutline(store)
+
+    const statsRegion = screen.getByRole('region', { name: 'Document statistics' })
+    expect(within(statsRegion).getByText('5')).toBeTruthy()   // nodes
+    expect(within(statsRegion).getByText('3')).toBeTruthy()   // choices
+    expect(within(statsRegion).getByText('2')).toBeTruthy()   // checkpoints
+    expect(within(statsRegion).getByText('1')).toBeTruthy()   // terminals
+    expect(within(statsRegion).getByText('nodes')).toBeTruthy()
+    expect(within(statsRegion).getByText('checkpoints')).toBeTruthy()
+    expect(within(statsRegion).getByText('terminal')).toBeTruthy()  // singular — 1 terminal
+  })
+
+  it('updates the stats bar after a node is added', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    renderOutline(store)
+
+    fireEvent.click(screen.getByRole('button', { name: /Add node/i }))
+
+    const statsRegion = screen.getByRole('region', { name: 'Document statistics' })
+    expect(within(statsRegion).getByText('2')).toBeTruthy()
+  })
+
+  it('has no axe violations in the stats bar', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { node_type: 'start', choices: [makeChoice('n2')] }),
+      makeNode('n2', { node_type: 'end' }),
+    ])
+    const { container } = renderOutline(store)
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: TypeBadge and ClassifierTag in header (AC4)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: node card header badges', () => {
+  it('shows the TypeBadge in the collapsed header', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'decision' })])
+    const { container } = renderOutline(store)
+    const row = getNodeRow(container, 0)
+    // Query within the header button only — the hidden body also contains the select option
+    const headerButton = row.querySelector('button[aria-expanded]') as HTMLElement
+    expect(within(headerButton).getByText('decision')).toBeTruthy()
+  })
+
+  it('shows the Orphan ClassifierTag in the collapsed header for an orphan node', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { node_type: 'start' }),
+      makeNode('orphan', { title: 'Lost Node' }),
+    ])
+    const { container } = renderOutline(store)
+    const orphanRow = getNodeRow(container, 1)
+    expect(within(orphanRow).getByText('Orphan')).toBeTruthy()
+  })
+
+  it('shows choice count in the collapsed header for non-terminal nodes', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { choices: [makeChoice('n2'), makeChoice('n3')] }),
+      makeNode('n2'),
+      makeNode('n3'),
+    ])
+    const { container } = renderOutline(store)
+    const row = getNodeRow(container, 0)
+    expect(within(row).getByText('2 choices')).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: Delete node with inline confirmation (AC5)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: delete node', () => {
+  it('shows inline confirmation prompt when Delete node is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1'), makeNode('n2')])
+    const { container } = renderOutline(store)
+    expandNode(container, 0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete node' }))
+
+    expect(screen.getByText('Are you sure?')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy()
+  })
+
+  it('removes the node from the document when Confirm is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1'), makeNode('n2')])
+    const { container } = renderOutline(store)
+    expandNode(container, 0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete node' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(store.getState().document).toHaveLength(1)
+    expect(store.getState().document[0]?.id).toBe('n2')
+  })
+
+  it('dismisses the confirmation without deleting when Cancel is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1'), makeNode('n2')])
+    const { container } = renderOutline(store)
+    expandNode(container, 0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete node' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(store.getState().document).toHaveLength(2)
+    expect(screen.queryByText('Are you sure?')).toBeNull()
+  })
+
+  it('has no axe violations with the delete confirmation visible', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1'), makeNode('n2')])
+    const { container } = renderOutline(store)
+    expandNode(container, 0)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete node' }))
+
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: Terminal info box shows node type name (AC6)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: terminal info box', () => {
+  it('shows "Terminal node — choices are not permitted on end nodes" for end type', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1', { node_type: 'end' })])
+    const { container } = renderOutline(store)
+    expandNode(container)
+
+    expect(screen.getByText(/Terminal node — choices are not permitted on end nodes/i)).toBeTruthy()
+  })
+
+  it('shows "Terminal node — choices are not permitted on adventure_success nodes"', async () => {
+    const store = await makeStoreWithNodes([
+      makeNode('n1', { node_type: 'adventure_success' }),
+    ])
+    const { container } = renderOutline(store)
+    expandNode(container)
+
+    expect(
+      screen.getByText(/Terminal node — choices are not permitted on adventure_success nodes/i),
+    ).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-540: Add node button (AC7)
+// ---------------------------------------------------------------------------
+
+describe('OutlineView — OPS-540: add node', () => {
+  it('renders the "+ Add node" button', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    renderOutline(store)
+
+    expect(screen.getByRole('button', { name: /\+ Add node/i })).toBeTruthy()
+  })
+
+  it('appends a narrative stub node when "+ Add node" is clicked', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    renderOutline(store)
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add node/i }))
+
+    expect(store.getState().document).toHaveLength(2)
+    const newNode = store.getState().document[1]!
+    expect(newNode.node_type).toBe('narrative')
+    expect(newNode.title).toBe('New node')
+    expect(newNode.choices).toHaveLength(0)
+  })
+
+  it('opens the new node accordion and focuses its title field after adding', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add node/i }))
+
+    const allButtons = container.querySelectorAll(
+      'ul[aria-label="Adventure outline"] > li > button[aria-expanded]',
+    )
+    const newNodeButton = allButtons[1] as HTMLButtonElement
+    expect(newNodeButton.getAttribute('aria-expanded')).toBe('true')
+
+    const focusedElement = container.ownerDocument.activeElement
+    expect(focusedElement?.tagName).toBe('INPUT')
+    expect((focusedElement as HTMLInputElement).value).toBe('New node')
+  })
+
+  it('has no axe violations after adding a node', async () => {
+    const store = await makeStoreWithNodes([makeNode('n1')])
+    const { container } = renderOutline(store)
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add node/i }))
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()

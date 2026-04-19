@@ -1,0 +1,197 @@
+.card {
+  border-left: 4px solid var(--node-border);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--node-bg);
+  border: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.header:hover {
+  filter: brightness(0.97);
+}
+
+.header[aria-expanded="true"] {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.title {
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.choiceCount {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.chevron {
+  font-size: 0.6rem;
+  color: #94a3b8;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.header[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nodeId {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin: 0 0 8px;
+  word-break: break-all;
+  display: inline-block;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.field input[type="text"],
+.field textarea,
+.field select {
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ttsButton {
+  margin-top: 4px;
+  margin-bottom: 4px;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: not-allowed;
+  font-size: 0.8rem;
+  align-self: flex-start;
+}
+
+.terminalBox {
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #991b1b;
+  margin: 0;
+}
+
+.footer {
+  padding: 8px 12px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  background: #f8fafc;
+}
+
+.deleteButton {
+  padding: 5px 12px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.deleteButton:hover {
+  background: #fef2f2;
+}
+
+.confirmText {
+  font-size: 0.8rem;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.confirmButton {
+  padding: 5px 12px;
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.confirmButton:hover {
+  background: #b91c1c;
+}
+
+.cancelButton {
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
