@@ -1,4 +1,5 @@
 import type { Adventure } from '../../types/adventure'
+import styles from './AssetManifest.module.css'
 
 /** A single unique audio asset referenced in the adventure document. */
 export interface AssetManifestEntry {
@@ -43,6 +44,11 @@ export function deriveAssetManifest(document: Adventure): AssetManifestEntry[] {
 
 export interface AssetManifestProps {
   document: Adventure
+  /**
+   * When true, renders asset filenames as compact monospace chips instead of
+   * a labelled list. Used by the sidebar widget.
+   */
+  compact?: boolean
 }
 
 /**
@@ -55,8 +61,27 @@ export interface AssetManifestProps {
  * - Section uses `aria-label="Asset manifest"` to surface it as a landmark.
  * - Values of `'none'` and empty strings are excluded from the manifest.
  */
-export function AssetManifest({ document }: AssetManifestProps) {
+export function AssetManifest({ document, compact = false }: AssetManifestProps) {
   const entries = deriveAssetManifest(document)
+
+  if (compact) {
+    return (
+      <section aria-label="Asset manifest">
+        <h2>Asset manifest ({entries.length})</h2>
+        {entries.length === 0 ? (
+          <p>No audio assets referenced.</p>
+        ) : (
+          <ul className={styles.chipList}>
+            {entries.map((entry) => (
+              <li key={`${entry.type}:${entry.filename}`}>
+                <code className={styles.chip}>{entry.filename}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    )
+  }
 
   return (
     <section aria-label="Asset manifest">

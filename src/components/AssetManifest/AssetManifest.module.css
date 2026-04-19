@@ -1,0 +1,19 @@
+.chipList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  color: #334155;
+  font-family: monospace;
+}

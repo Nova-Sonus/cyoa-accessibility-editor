@@ -1,3 +1,44 @@
+/* Two-column layout */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 0 16px 32px;
+}
+
+.nodeListColumn {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+/* Responsive — single column on narrow viewports */
+@media (max-width: 899px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Stats bar */
 .statsBar {
   display: flex;
   gap: 24px;
@@ -26,6 +67,7 @@
   letter-spacing: 0.03em;
 }
 
+/* Add node */
 .addNodeWrapper {
   padding: 8px 0 16px;
 }
@@ -48,4 +90,64 @@
   border-color: #94a3b8;
   background: #f8fafc;
   color: #475569;
+}
+
+/* Save button */
+.saveWrapper {
+  padding-bottom: 16px;
+}
+
+.saveButton {
+  padding: 8px 16px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.saveButton:hover {
+  background: #1d4ed8;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.saveButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Sidebar widgets */
+.sidebarWidget {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.sidebarWidgetAmber {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.sidebarWidgetGreen {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.widgetHeading {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
 }

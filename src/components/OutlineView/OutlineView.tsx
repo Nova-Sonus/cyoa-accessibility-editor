@@ -3,6 +3,7 @@ import { useAdventureStore } from '../../store/StoreContext'
 import { deriveIssues } from '../IssuesPanel/deriveIssues'
 import { IssuesPanel } from '../IssuesPanel/IssuesPanel'
 import { AssetManifest, deriveAssetManifest } from '../AssetManifest'
+import { NodeIndex } from '../NodeIndex/NodeIndex'
 import { NodeRow } from './NodeRow'
 import { TERMINAL_NODE_TYPES } from '../../types/adventure'
 import styles from './OutlineView.module.css'
@@ -176,8 +177,19 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     return <p>No adventure loaded. Open a file to begin authoring.</p>
   }
 
+  const nodeIndexEntries = useMemo(
+    () =>
+      document.map((n) => ({
+        id: n.id,
+        title: n.title,
+        node_type: n.node_type,
+        checkpoint: n.checkpoint,
+      })),
+    [document],
+  )
+
   return (
-    <div>
+    <div className={styles.layout}>
       {/*
        * Consolidated aria-live region. All field-commit and count-change
        * announcements are routed here so only one region fires per interaction.
@@ -191,80 +203,97 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
         {announcement}
       </div>
 
-      {/* Stats bar */}
-      <section aria-label="Document statistics" className={styles.statsBar}>
-        <div className={styles.stat}>
-          <span className={styles.statValue}>{stats.totalNodes}</span>
-          <span className={styles.statLabel}>{stats.totalNodes === 1 ? 'node' : 'nodes'}</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statValue}>{stats.totalChoices}</span>
-          <span className={styles.statLabel}>{stats.totalChoices === 1 ? 'choice' : 'choices'}</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statValue}>{stats.checkpoints}</span>
-          <span className={styles.statLabel}>{stats.checkpoints === 1 ? 'checkpoint' : 'checkpoints'}</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statValue}>{stats.terminals}</span>
-          <span className={styles.statLabel}>{stats.terminals === 1 ? 'terminal' : 'terminals'}</span>
-        </div>
-      </section>
+      {/* Main node-list column */}
+      <div className={styles.nodeListColumn}>
+        {/* Stats bar */}
+        <section aria-label="Document statistics" className={styles.statsBar}>
+          <div className={styles.stat}>
+            <span className={styles.statValue}>{stats.totalNodes}</span>
+            <span className={styles.statLabel}>{stats.totalNodes === 1 ? 'node' : 'nodes'}</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statValue}>{stats.totalChoices}</span>
+            <span className={styles.statLabel}>{stats.totalChoices === 1 ? 'choice' : 'choices'}</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statValue}>{stats.checkpoints}</span>
+            <span className={styles.statLabel}>{stats.checkpoints === 1 ? 'checkpoint' : 'checkpoints'}</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statValue}>{stats.terminals}</span>
+            <span className={styles.statLabel}>{stats.terminals === 1 ? 'terminal' : 'terminals'}</span>
+          </div>
+        </section>
 
-      <ul aria-label="Adventure outline">
-        {document.map((node) => (
-          <NodeRow
-            key={node.id}
-            node={node}
-            tags={classifierCache.get(node.id) ?? {
-              isOrphan: false,
-              isTerminal: false,
-              isJunction: false,
-              isBranch: false,
-              isLinearLink: false,
-              isCheckpoint: false,
-              sceneId: null,
-              depth: Infinity,
-              unreachable: false,
-            }}
-            audioSuggestions={audioSuggestions}
-            onAnnounce={announce}
-            onChoicesCleared={handleChoicesCleared}
-            allNodeIds={allNodeIds}
-            onNewNodeCreated={handleNewNodeCreated}
-            focusTitleOnMount={focusTargetId === node.id}
-            onFocusApplied={handleFocusApplied}
-          />
-        ))}
-      </ul>
+        <ul aria-label="Adventure outline">
+          {document.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
+              tags={classifierCache.get(node.id) ?? {
+                isOrphan: false,
+                isTerminal: false,
+                isJunction: false,
+                isBranch: false,
+                isLinearLink: false,
+                isCheckpoint: false,
+                sceneId: null,
+                depth: Infinity,
+                unreachable: false,
+              }}
+              audioSuggestions={audioSuggestions}
+              onAnnounce={announce}
+              onChoicesCleared={handleChoicesCleared}
+              allNodeIds={allNodeIds}
+              onNewNodeCreated={handleNewNodeCreated}
+              focusTitleOnMount={focusTargetId === node.id}
+              onFocusApplied={handleFocusApplied}
+            />
+          ))}
+        </ul>
 
-      {/* Add node */}
-      <div className={styles.addNodeWrapper}>
-        <button
-          type="button"
-          className={styles.addNodeButton}
-          onClick={handleAddNode}
-        >
-          + Add node
-        </button>
+        {/* Add node */}
+        <div className={styles.addNodeWrapper}>
+          <button
+            type="button"
+            className={styles.addNodeButton}
+            onClick={handleAddNode}
+          >
+            + Add node
+          </button>
+        </div>
+
+        <div className={styles.saveWrapper}>
+          <button
+            type="button"
+            className={styles.saveButton}
+            onClick={() => { void handleSave() }}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving…' : 'Save adventure'}
+          </button>
+        </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => { void handleSave() }}
-        disabled={isSaving}
-        style={{ marginBottom: '8px' }}
-      >
-        {isSaving ? 'Saving…' : 'Save adventure'}
-      </button>
+      {/* Sidebar */}
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarWidget}>
+          <h2 className={styles.widgetHeading}>Node index</h2>
+          <NodeIndex nodes={nodeIndexEntries} onActivate={handleActivateIssue} />
+        </div>
 
-      <IssuesPanel
-        issues={issues}
-        onActivate={handleActivateIssue}
-        repositoryError={repositoryError}
-      />
+        <div className={`${styles.sidebarWidget} ${issues.length > 0 || repositoryError ? styles.sidebarWidgetAmber : styles.sidebarWidgetGreen}`}>
+          <IssuesPanel
+            issues={issues}
+            onActivate={handleActivateIssue}
+            repositoryError={repositoryError}
+          />
+        </div>
 
-      <AssetManifest document={document} />
+        <div className={styles.sidebarWidget}>
+          <AssetManifest document={document} compact />
+        </div>
+      </aside>
     </div>
   )
 }
