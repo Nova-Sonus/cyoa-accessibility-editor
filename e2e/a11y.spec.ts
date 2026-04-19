@@ -216,7 +216,7 @@ test.describe('axe-core — canvas view', () => {
   test('no violations — empty state', async ({ page }) => {
     await page.reload()
     await page.waitForLoadState('networkidle')
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
       .analyze()
@@ -225,7 +225,7 @@ test.describe('axe-core — canvas view', () => {
 
   test('no violations with multi-node adventure', async ({ page }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
@@ -264,9 +264,9 @@ test.describe('Landmark and heading structure', () => {
     await expect(page.locator('main')).toHaveCount(1)
   })
 
-  test('view-selection nav is labelled', async ({ page }) => {
+  test('view-mode tablist is labelled', async ({ page }) => {
     await expect(
-      page.getByRole('navigation', { name: 'View selection' }),
+      page.getByRole('tablist', { name: 'View mode' }),
     ).toBeVisible()
   })
 
@@ -296,7 +296,7 @@ test.describe('Landmark and heading structure', () => {
     page,
   }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
@@ -313,7 +313,7 @@ test.describe('Landmark and heading structure', () => {
 
   test('canvas view: node list is a named landmark', async ({ page }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Node list/i }),
     ).toBeVisible()
@@ -321,7 +321,7 @@ test.describe('Landmark and heading structure', () => {
 
   test('canvas view: zoom toolbar is labelled', async ({ page }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('toolbar', { name: 'Canvas controls' }),
     ).toBeVisible()
@@ -340,32 +340,32 @@ test.describe('ARIA patterns', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('view toggle buttons expose pressed state via aria-pressed', async ({
+  test('view toggle tabs expose selected state via aria-selected', async ({
     page,
   }) => {
-    const outlineBtn = page.getByRole('button', { name: 'Outline' })
-    const canvasBtn = page.getByRole('button', { name: 'Canvas' })
+    const outlineTab = page.getByRole('tab', { name: 'Outline' })
+    const canvasTab = page.getByRole('tab', { name: 'Canvas' })
 
     // Outline is active on load
-    await expect(outlineBtn).toHaveAttribute('aria-pressed', 'true')
-    await expect(canvasBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(outlineTab).toHaveAttribute('aria-selected', 'true')
+    await expect(canvasTab).toHaveAttribute('aria-selected', 'false')
 
     // Switch to canvas
-    await canvasBtn.click()
-    await expect(outlineBtn).toHaveAttribute('aria-pressed', 'false')
-    await expect(canvasBtn).toHaveAttribute('aria-pressed', 'true')
+    await canvasTab.click()
+    await expect(outlineTab).toHaveAttribute('aria-selected', 'false')
+    await expect(canvasTab).toHaveAttribute('aria-selected', 'true')
 
     // Switch back
-    await outlineBtn.click()
-    await expect(outlineBtn).toHaveAttribute('aria-pressed', 'true')
-    await expect(canvasBtn).toHaveAttribute('aria-pressed', 'false')
+    await outlineTab.click()
+    await expect(outlineTab).toHaveAttribute('aria-selected', 'true')
+    await expect(canvasTab).toHaveAttribute('aria-selected', 'false')
   })
 
   test('canvas zoom percentage is in an aria-live region', async ({
     page,
   }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.locator('[aria-live="polite"][aria-atomic="true"]').filter({
         hasText: '%',
@@ -490,7 +490,7 @@ test.describe('Keyboard navigation — canvas view', () => {
     await page.goto('/')
     await clearStorage(page)
     await seedAdventure(page, 'multi', ADV_MULTI)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
@@ -531,8 +531,8 @@ test.describe('Keyboard navigation — canvas view', () => {
 
     // Should switch to outline view and focus the title input
     await expect(
-      page.getByRole('button', { name: 'Outline' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      page.getByRole('tab', { name: 'Outline' }),
+    ).toHaveAttribute('aria-selected', 'true')
   })
 
   test('zoom controls are keyboard accessible', async ({ page }) => {
@@ -614,7 +614,7 @@ test.describe('Focus management', () => {
     page,
   }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
@@ -627,8 +627,8 @@ test.describe('Focus management', () => {
 
     // View should switch to outline
     await expect(
-      page.getByRole('button', { name: 'Outline' }),
-    ).toHaveAttribute('aria-pressed', 'true')
+      page.getByRole('tab', { name: 'Outline' }),
+    ).toHaveAttribute('aria-selected', 'true')
 
     // Focus should land on a title text input
     await page.waitForFunction(() => {
@@ -709,7 +709,7 @@ test.describe('WCAG 2.2 AA — target size and focus visibility', () => {
   test('all canvas view buttons meet 24×24px minimum target size', async ({
     page,
   }) => {
-    await page.getByRole('button', { name: 'Canvas' }).click()
+    await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
