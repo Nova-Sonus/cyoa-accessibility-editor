@@ -40,7 +40,7 @@ export function AppHeader({ activeView, onViewChange, onNewAdventure, onOpen }: 
 
   return (
     <header className={styles.header}>
-      <span className={styles.logotype}>Nova Sonus — CYOA Editor</span>
+      <h1 className={styles.logotype}>Nova Sonus — CYOA Editor</h1>
 
       <div role="tablist" aria-label="View mode" className={styles.tablist}>
         {TABS.map((tab, index) => {

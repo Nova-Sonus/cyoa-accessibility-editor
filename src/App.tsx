@@ -77,28 +77,30 @@ export default function App() {
         />
         <LegendBar />
 
-        <div
-          role="tabpanel"
-          id="panel-outline"
-          aria-labelledby="tab-outline"
-          hidden={activeView !== 'outline'}
-          className={styles.panel}
-        >
-          <OutlineView
-            focusNodeId={pendingFocusId}
-            onFocusConsumed={handleFocusConsumed}
-          />
-        </div>
+        <main className={styles.main}>
+          <div
+            role="tabpanel"
+            id="panel-outline"
+            aria-labelledby="tab-outline"
+            hidden={activeView !== 'outline'}
+            className={styles.panel}
+          >
+            <OutlineView
+              focusNodeId={pendingFocusId}
+              onFocusConsumed={handleFocusConsumed}
+            />
+          </div>
 
-        <div
-          role="tabpanel"
-          id="panel-canvas"
-          aria-labelledby="tab-canvas"
-          hidden={activeView !== 'canvas'}
-          className={styles.panel}
-        >
-          <CanvasView onNodeActivate={handleCanvasNodeActivate} />
-        </div>
+          <div
+            role="tabpanel"
+            id="panel-canvas"
+            aria-labelledby="tab-canvas"
+            hidden={activeView !== 'canvas'}
+            className={styles.panel}
+          >
+            <CanvasView onNodeActivate={handleCanvasNodeActivate} />
+          </div>
+        </main>
       </div>
     </AdventureStoreProvider>
   )
