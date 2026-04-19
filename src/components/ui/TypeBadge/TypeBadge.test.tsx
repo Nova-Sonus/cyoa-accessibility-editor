@@ -26,10 +26,13 @@ describe('TypeBadge', () => {
     expect(screen.getByText('scene start')).toBeInTheDocument()
   })
 
-  it('sets --badge-bg CSS custom property from the token', () => {
+  it('sets CSS custom properties from the token (light bg, dark text, border)', () => {
     const { container } = render(<TypeBadge type="combat" />)
     const span = container.querySelector('span')
-    expect(span?.style.getPropertyValue('--badge-bg')).toBe('#d97706')
+    // Uses light bg + dark text for WCAG contrast compliance
+    expect(span?.style.getPropertyValue('--badge-bg')).toBe(NODE_COLOURS.combat.bg)
+    expect(span?.style.getPropertyValue('--badge-text')).toBe(NODE_COLOURS.combat.text)
+    expect(span?.style.getPropertyValue('--badge-border')).toBe(NODE_COLOURS.combat.border)
   })
 
   it('has zero axe violations', async () => {

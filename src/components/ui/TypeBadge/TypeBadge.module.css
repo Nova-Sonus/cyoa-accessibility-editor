@@ -4,8 +4,9 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--badge-text);
   background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
   border-radius: 4px;
   padding: 2px 8px;
   line-height: 18px;

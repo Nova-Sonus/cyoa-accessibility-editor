@@ -11,7 +11,11 @@ export function TypeBadge({ type }: Props) {
   return (
     <span
       className={styles.badge}
-      style={{ '--badge-bg': colours.badge } as React.CSSProperties}
+      style={{
+        '--badge-bg': colours.bg,
+        '--badge-border': colours.border,
+        '--badge-text': colours.text,
+      } as React.CSSProperties}
     >
       {type.replace(/_/g, ' ')}
     </span>
