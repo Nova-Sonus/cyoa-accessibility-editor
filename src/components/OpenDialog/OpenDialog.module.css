@@ -5,11 +5,16 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
   width: min(560px, calc(100vw - 2rem));
   max-height: calc(100vh - 4rem);
-  display: flex;
-  flex-direction: column;
   background: #fff;
   color: #1e293b;
   font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* display: flex must only apply when the dialog is open so the UA
+   display:none on a closed <dialog> is not overridden. */
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
 }
 
 .dialog::backdrop {
