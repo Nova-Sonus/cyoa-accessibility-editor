@@ -1,0 +1,95 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: #1e293b;
+  color: #f8fafc;
+  border-bottom: 2px solid #334155;
+}
+
+.logotype {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f1f5f9;
+  flex-shrink: 0;
+  margin-right: auto;
+}
+
+.tablist {
+  display: flex;
+  gap: 0;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tab {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.4rem 1rem;
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tab:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.tab:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: -2px;
+}
+
+.tabSelected {
+  background: #2563eb;
+  color: #fff;
+}
+
+.tabSelected:hover {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.actionButton {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.4rem 0.875rem;
+  background: #334155;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.actionButton:hover {
+  background: #475569;
+}
+
+.actionButton:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.actionButton[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
