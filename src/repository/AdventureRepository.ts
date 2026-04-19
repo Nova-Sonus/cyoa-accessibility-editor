@@ -1,4 +1,4 @@
-import type { Adventure } from '../types/adventure'
+import type { Adventure, AdventureMetadata } from '../types/adventure'
 
 /**
  * Persistence contract for adventure documents.
@@ -33,4 +33,11 @@ export interface AdventureRepository {
    * @throws {Error} if no adventure exists with that id.
    */
   delete(id: string): Promise<void>
+
+  /**
+   * Returns lightweight metadata for all stored adventures, ordered by
+   * most-recently saved first.  Used by the Open dialog to display a human-
+   * readable list without loading full documents.
+   */
+  listMetadata(): Promise<AdventureMetadata[]>
 }

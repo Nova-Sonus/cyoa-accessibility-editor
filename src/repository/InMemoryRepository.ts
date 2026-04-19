@@ -1,4 +1,4 @@
-import type { Adventure } from '../types/adventure'
+import type { Adventure, AdventureMetadata } from '../types/adventure'
 import type { AdventureRepository } from './AdventureRepository'
 
 /**
@@ -15,9 +15,16 @@ import type { AdventureRepository } from './AdventureRepository'
  */
 export class InMemoryRepository implements AdventureRepository {
   private readonly store = new Map<string, Adventure>()
+  private readonly metadata = new Map<string, AdventureMetadata>()
 
   async list(): Promise<string[]> {
     return Array.from(this.store.keys())
+  }
+
+  async listMetadata(): Promise<AdventureMetadata[]> {
+    return Array.from(this.metadata.values()).sort(
+      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+    )
   }
 
   async load(id: string): Promise<Adventure> {
@@ -30,6 +37,9 @@ export class InMemoryRepository implements AdventureRepository {
 
   async save(id: string, adventure: Adventure): Promise<void> {
     this.store.set(id, JSON.parse(JSON.stringify(adventure)) as Adventure)
+    const title = adventure[0]?.title ?? 'Untitled'
+    const savedAt = new Date().toISOString()
+    this.metadata.set(id, { id, title, savedAt })
   }
 
   async delete(id: string): Promise<void> {
@@ -37,5 +47,6 @@ export class InMemoryRepository implements AdventureRepository {
       throw new Error(`Adventure not found: "${id}"`)
     }
     this.store.delete(id)
+    this.metadata.delete(id)
   }
 }

@@ -1,5 +1,5 @@
 import { validateAdventure, getValidationErrors } from '../validation/validator'
-import type { Adventure } from '../types/adventure'
+import type { Adventure, AdventureMetadata } from '../types/adventure'
 import type { AdventureRepository } from './AdventureRepository'
 
 // ---------------------------------------------------------------------------
@@ -10,7 +10,7 @@ import type { AdventureRepository } from './AdventureRepository'
 // data across page reloads without requiring a server or user file-picker gesture.
 //
 // Key scheme:
-//   nova-sonus:index          JSON-encoded string[] of stored adventure IDs
+//   nova-sonus:index          JSON-encoded AdventureMetadata[] of stored adventures
 //   nova-sonus:adv:<id>       JSON-encoded Adventure document
 // ---------------------------------------------------------------------------
 
@@ -62,9 +62,27 @@ export class RepositoryValidationError extends Error {
  * throughout the app.
  */
 export class LocalFileRepository implements AdventureRepository {
-  async list(): Promise<string[]> {
+  async listMetadata(): Promise<AdventureMetadata[]> {
     const raw = localStorage.getItem(indexKey())
-    return raw !== null ? (JSON.parse(raw) as string[]) : []
+    if (raw === null) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed) || parsed.length === 0) return []
+    // Migrate legacy string[] index (stored pre-OPS-542) — treat as unknown titles.
+    if (typeof parsed[0] === 'string') {
+      return (parsed as string[]).map((id) => ({
+        id,
+        title: 'Unknown adventure',
+        savedAt: new Date(0).toISOString(),
+      }))
+    }
+    return (parsed as AdventureMetadata[]).slice().sort(
+      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+    )
+  }
+
+  async list(): Promise<string[]> {
+    const metadata = await this.listMetadata()
+    return metadata.map((m) => m.id)
   }
 
   async load(id: string): Promise<Adventure> {
@@ -86,18 +104,23 @@ export class LocalFileRepository implements AdventureRepository {
 
     localStorage.setItem(docKey(id), JSON.stringify(adventure))
 
-    const current = await this.list()
-    if (!current.includes(id)) {
-      localStorage.setItem(indexKey(), JSON.stringify([...current, id]))
-    }
+    const title = adventure[0]?.title ?? 'Untitled'
+    const savedAt = new Date().toISOString()
+    const current = await this.listMetadata()
+    const existingIndex = current.findIndex((m) => m.id === id)
+    const updated: AdventureMetadata[] =
+      existingIndex >= 0
+        ? current.map((m) => (m.id === id ? { id, title, savedAt } : m))
+        : [...current, { id, title, savedAt }]
+    localStorage.setItem(indexKey(), JSON.stringify(updated))
   }
 
   async delete(id: string): Promise<void> {
-    const current = await this.list()
-    if (!current.includes(id)) {
+    const current = await this.listMetadata()
+    if (!current.some((m) => m.id === id)) {
       throw new Error(`Adventure not found: "${id}"`)
     }
     localStorage.removeItem(docKey(id))
-    localStorage.setItem(indexKey(), JSON.stringify(current.filter((x) => x !== id)))
+    localStorage.setItem(indexKey(), JSON.stringify(current.filter((m) => m.id !== id)))
   }
 }

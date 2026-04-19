@@ -139,5 +139,56 @@ export function defineContractSuite(
         await expect(repo.load('keep')).resolves.toEqual(minimalAdventure)
       })
     })
+
+    // --------------------------------------------------------- listMetadata
+    describe('listMetadata', () => {
+      it('returns an empty array when no adventures are stored', async () => {
+        expect(await repo.listMetadata()).toEqual([])
+      })
+
+      it('returns metadata with the correct id and title from the first node', async () => {
+        await repo.save('m1', minimalAdventure)
+        const metadata = await repo.listMetadata()
+        const entry = metadata.find((m) => m.id === 'm1')
+        expect(entry).toBeDefined()
+        expect(entry!.title).toBe('The Beginning')
+      })
+
+      it('records a savedAt ISO string on save', async () => {
+        const before = new Date().toISOString()
+        await repo.save('ts', minimalAdventure)
+        const after = new Date().toISOString()
+        const entry = (await repo.listMetadata()).find((m) => m.id === 'ts')
+        expect(entry).toBeDefined()
+        expect(entry!.savedAt >= before).toBe(true)
+        expect(entry!.savedAt <= after).toBe(true)
+      })
+
+      it('upserts the title when an adventure is re-saved', async () => {
+        await repo.save('upd', minimalAdventure)
+        const revised: Adventure = [
+          { ...minimalAdventure[0], title: 'Revised' },
+          minimalAdventure[1]!,
+        ]
+        await repo.save('upd', revised)
+        const entry = (await repo.listMetadata()).find((m) => m.id === 'upd')
+        expect(entry!.title).toBe('Revised')
+        expect((await repo.listMetadata()).filter((m) => m.id === 'upd')).toHaveLength(1)
+      })
+
+      it('removes metadata when an adventure is deleted', async () => {
+        await repo.save('gone', minimalAdventure)
+        await repo.delete('gone')
+        const ids = (await repo.listMetadata()).map((m) => m.id)
+        expect(ids).not.toContain('gone')
+      })
+
+      it('returns metadata for all stored adventures', async () => {
+        await repo.save('a1', minimalAdventure)
+        await repo.save('a2', minimalAdventure)
+        const ids = (await repo.listMetadata()).map((m) => m.id).sort()
+        expect(ids).toEqual(['a1', 'a2'])
+      })
+    })
   })
 }

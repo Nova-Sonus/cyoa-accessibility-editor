@@ -6,7 +6,8 @@ import { OutlineView } from './components/OutlineView/OutlineView'
 import { CanvasView } from './components/CanvasView'
 import { AppHeader } from './components/AppHeader/AppHeader'
 import { LegendBar } from './components/LegendBar/LegendBar'
-import type { Adventure } from './types/adventure'
+import { OpenDialog } from './components/OpenDialog/OpenDialog'
+import type { Adventure, AdventureMetadata } from './types/adventure'
 import styles from './App.module.css'
 
 type ActiveView = 'outline' | 'canvas'
@@ -33,6 +34,8 @@ export default function App() {
 
   const [activeView, setActiveView] = useState<ActiveView>('outline')
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
+  const [openDialogVisible, setOpenDialogVisible] = useState(false)
+  const [openDialogMetadata, setOpenDialogMetadata] = useState<AdventureMetadata[]>([])
 
   useEffect(() => {
     const repo = repoRef.current
@@ -58,6 +61,18 @@ export default function App() {
     setPendingFocusId(firstNodeId)
   }, [])
 
+  const handleOpenDialog = useCallback(async () => {
+    const metadata = await repoRef.current.listMetadata()
+    setOpenDialogMetadata(metadata)
+    setOpenDialogVisible(true)
+  }, [])
+
+  const handleSelectAdventure = useCallback(async (id: string) => {
+    setOpenDialogVisible(false)
+    await storeRef.current.getState().loadAdventure(id)
+    setActiveView('outline')
+  }, [])
+
   const handleCanvasNodeActivate = useCallback((nodeId: string) => {
     setPendingFocusId(nodeId)
     setActiveView('outline')
@@ -74,6 +89,7 @@ export default function App() {
           activeView={activeView}
           onViewChange={setActiveView}
           onNewAdventure={() => { void handleNewAdventure() }}
+          onOpen={() => { void handleOpenDialog() }}
         />
         <LegendBar />
 
@@ -102,6 +118,13 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      <OpenDialog
+        isOpen={openDialogVisible}
+        metadata={openDialogMetadata}
+        onSelect={(id) => { void handleSelectAdventure(id) }}
+        onClose={() => setOpenDialogVisible(false)}
+      />
     </AdventureStoreProvider>
   )
 }

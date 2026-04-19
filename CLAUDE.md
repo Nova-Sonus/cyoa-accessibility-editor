@@ -96,7 +96,9 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - **Fonts** — DM Sans and Source Serif 4 are self-hosted in `public/fonts/` and declared via `@font-face` in `src/styles/fonts.css`, imported once in `src/main.tsx`. Never load fonts from Google Fonts (cross-origin + GDPR concern).
 - **Node card accordion** — `NodeRow` uses the `<button aria-expanded>` disclosure pattern, **not** `<details>`/`<summary>`. CSS modules control the open/closed header background via `[aria-expanded="true"]` selector on the button.
 - **Shared primitives** (`src/components/ui/`): `TypeBadge`, `ClassifierTag`, `CheckpointIndicator`, `FieldGroup`, `Field`, `SelectField`, `ComboField`. These are zero-dependency presentational components; import them everywhere type badges or form fields appear.
-- **`NodeIndex`** (`src/components/NodeIndex/`) — sidebar quick-nav; a `<nav aria-label="Node index">` of `<button>` elements. Activating one sets `focusTargetId` in `OutlineView` via the existing `focusTitleOnMount` / `onFocusApplied` mechanism.
+- **`NodeIndex`** (`src/components/NodeIndex/`) — sidebar quick-nav; a `<nav aria-label="Node index">` of `<button>` elements. Each entry: coloured dot (from `NODE_COLOURS` badge token) + truncated title + amber `data-testid="checkpoint-indicator"` bar (aria-hidden) when `checkpoint === true`. Arrow keys (Up/Down) navigate between entries. Activating a button calls `onActivate(nodeId)`, wired in `OutlineView` to set `focusTargetId` — the existing `focusTitleOnMount` / `onFocusApplied` mechanism handles the expand + focus.
+- **Two-column layout** (`OutlineView`) — `OutlineView` renders a flex row: `nodeListColumn` (flex 1, min-width 0) + `<aside aria-label="Sidebar">` (280 px, sticky top 0). Collapses to single column below 900 px via media query. The sidebar contains three widgets: NodeIndex, IssuesPanel (card wrapper: amber when issues/error, green when clean), AssetManifest (compact chip display). **Rules of Hooks**: all `useMemo` hooks must be declared before the `if (document.length === 0)` early return — placing hooks after a conditional return causes a "Rendered more hooks" crash when the document transitions from empty to loaded.
+- **`AssetManifest` compact prop** — `<AssetManifest document={doc} compact />` renders filenames as pill chips (`chipList` / `chip` CSS module classes) with heading "Asset manifest (N)". Default (no prop) renders the original labelled list with heading "Asset manifest".
 - **"Add node" button** — at the bottom of the `<ul>` in `OutlineView`. Creates a narrative stub via `store.addNode` and sets `focusTargetId` to the new node's id.
 
 ---
@@ -155,9 +157,9 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 | 12 | OPS-538 | Design tokens and shared UI component library | Done |
 | 13 | OPS-539 | App chrome — header, legend bar, and view toggle | Done |
 | 14 | OPS-540 | Node card visual redesign, stats bar, and Add Node | Done |
-| 15 | OPS-541 | Two-column layout and sidebar widgets | — |
-| 16 | OPS-542 | Open adventure — selection dialog and metadata index | — |
+| 15 | OPS-541 | Two-column layout and sidebar widgets | Done |
+| 16 | OPS-542 | Open adventure — selection dialog and metadata index | Done |
 | 17 | OPS-537 | TTS preview of narrativeText via Web Speech API | — |
 | 18 | OPS-536 | Accessibility audit and JAWS validation | — |
 
-Implementation order: 538 → 539 → 540 → 541 → 542 → 537 → 536. OPS-541 is next. OPS-537 is unblocked (TTS placeholder button landed in OPS-540). OPS-536 runs last when the full visual shell is in place.
+Implementation order: 538 → 539 → 540 → 541 → 542 → 537 → 536. OPS-542 done 2026-04-19. OPS-537 is next (TTS placeholder button landed in OPS-540). OPS-536 runs last when the full visual shell is in place.

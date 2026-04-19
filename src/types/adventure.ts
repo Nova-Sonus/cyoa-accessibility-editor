@@ -1,5 +1,12 @@
 import type { FightingFantasyAdventureStoryData } from './adventure.generated'
 
+/** Lightweight summary of a stored adventure — used by the Open dialog. */
+export interface AdventureMetadata {
+  id: string
+  title: string
+  savedAt: string // ISO 8601
+}
+
 /** The full adventure document — an ordered array of nodes conforming to CYOA_Schema.json. */
 export type Adventure = FightingFantasyAdventureStoryData
 
