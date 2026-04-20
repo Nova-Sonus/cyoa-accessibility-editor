@@ -28,6 +28,9 @@ export interface AdventureState {
    * re-renders.
    */
   classifierCache: ReadonlyMap<NodeId, ClassifierTags>
+
+  /** The id of the currently selected node, or null when no node is selected. */
+  selectedNodeId: string | null
 }
 
 /** Async and sync actions exposed to consumers. */
@@ -90,6 +93,11 @@ export interface AdventureActions {
    * @throws {StoreActionError} NODE_NOT_FOUND if `nodeId` is absent.
    */
   deleteChoice(nodeId: string, choiceIndex: number): void
+
+  /**
+   * Set the currently selected node. Pass null to deselect.
+   */
+  setSelectedNodeId(id: string | null): void
 
   /**
    * Atomically create a stub node and link it as the `nextNode` of the choice
@@ -195,6 +203,13 @@ export function createAdventureStore(repository: AdventureRepository) {
         adventureId: null,
         document: [],
         classifierCache: new Map<NodeId, ClassifierTags>(),
+        selectedNodeId: null,
+
+        // ---- selection ---------------------------------------------------
+
+        setSelectedNodeId: (id) => {
+          set({ selectedNodeId: id }, false, 'setSelectedNodeId')
+        },
 
         // ---- async persistence -------------------------------------------
 
