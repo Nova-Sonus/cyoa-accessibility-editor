@@ -1,6 +1,8 @@
 import { validateAdventure, getValidationErrors } from '../validation/validator'
 import type { Adventure, AdventureMetadata } from '../types/adventure'
 import type { AdventureRepository } from './AdventureRepository'
+import { RepositoryValidationError } from './errors'
+export { RepositoryValidationError } from './errors'
 
 // ---------------------------------------------------------------------------
 // LocalFileRepository — localStorage-backed persistence
@@ -22,25 +24,6 @@ function indexKey(): string {
 
 function docKey(id: string): string {
   return `${NS}:adv:${id}`
-}
-
-// ---------------------------------------------------------------------------
-// RepositoryValidationError
-// ---------------------------------------------------------------------------
-
-/**
- * Thrown by LocalFileRepository.save() when the adventure document fails Ajv
- * schema validation.  The caller can inspect `validationErrors` for a list of
- * human-readable Ajv messages.
- */
-export class RepositoryValidationError extends Error {
-  readonly validationErrors: string[]
-
-  constructor(message: string, errors: string[]) {
-    super(message)
-    this.name = 'RepositoryValidationError'
-    this.validationErrors = errors
-  }
 }
 
 // ---------------------------------------------------------------------------

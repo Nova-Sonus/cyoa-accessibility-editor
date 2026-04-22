@@ -417,7 +417,7 @@ describe('createNodeAndLinkChoice', () => {
 
     expect(store.getState().document).toHaveLength(2)
     const stub = store.getState().document[1]!
-    expect(stub.node_type).toBe('narrative')
+    expect(stub.node_type).toBe('decision')
     expect(stub.title).toBe('New node')
     expect(stub.choices).toHaveLength(0)
   })
@@ -476,5 +476,71 @@ describe('createNodeAndLinkChoice', () => {
 
     const { classifierCache } = store.getState()
     expect(classifierCache.has(newId)).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// app-level workflow actions
+// ---------------------------------------------------------------------------
+
+describe('createAdventure', () => {
+  it('creates a schema-valid document, persists it, and loads it into the store', async () => {
+    const store = makeStore()
+    await store.getState().createAdventure()
+
+    const { adventureId, document, selectedNodeId } = store.getState()
+    expect(adventureId).not.toBeNull()
+    expect(document).toHaveLength(1)
+    expect(document[0]!.node_type).toBe('start')
+    expect(selectedNodeId).toBe(document[0]!.id)
+  })
+
+  it('persists the new adventure to the repository', async () => {
+    const repo = new InMemoryRepository()
+    const store = createAdventureStore(repo)
+    await store.getState().createAdventure()
+
+    const { adventureId } = store.getState()
+    const ids = await repo.list()
+    expect(ids).toContain(adventureId)
+  })
+})
+
+describe('autoLoadLatest', () => {
+  it('loads the most recently saved adventure when one exists', async () => {
+    const repo = new InMemoryRepository()
+    await repo.save('first', [makeNode('n1', { node_type: 'start' })])
+    const store = createAdventureStore(repo)
+    await store.getState().autoLoadLatest()
+
+    expect(store.getState().adventureId).toBe('first')
+    expect(store.getState().document).toHaveLength(1)
+  })
+
+  it('is a no-op when the repository is empty', async () => {
+    const store = makeStore()
+    await store.getState().autoLoadLatest()
+
+    expect(store.getState().adventureId).toBeNull()
+    expect(store.getState().document).toHaveLength(0)
+  })
+})
+
+describe('listAdventureMetadata', () => {
+  it('returns metadata from the repository', async () => {
+    const repo = new InMemoryRepository()
+    await repo.save('abc', [makeNode('n1', { node_type: 'start', title: 'My Adventure' })])
+    const store = createAdventureStore(repo)
+    const metadata = await store.getState().listAdventureMetadata()
+
+    expect(metadata).toHaveLength(1)
+    expect(metadata[0]!.id).toBe('abc')
+    expect(metadata[0]!.title).toBe('My Adventure')
+  })
+
+  it('returns an empty array when the repository is empty', async () => {
+    const store = makeStore()
+    const metadata = await store.getState().listAdventureMetadata()
+    expect(metadata).toHaveLength(0)
   })
 })

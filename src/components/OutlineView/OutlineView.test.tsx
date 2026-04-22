@@ -771,7 +771,7 @@ describe('OutlineView — create new node via nextNode combobox', () => {
     expect(store.getState().document).toHaveLength(3)
     const newNode = store.getState().document[2]!
     expect(newNode.title).toBe('New node')
-    expect(newNode.node_type).toBe('narrative')
+    expect(newNode.node_type).toBe('decision')
     expect(store.getState().document[0]?.choices[0]?.nextNode).toBe(newNode.id)
   })
 

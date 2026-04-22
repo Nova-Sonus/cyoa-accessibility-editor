@@ -8,30 +8,13 @@ import { CompanionPanel } from './components/CompanionPanel/CompanionPanel'
 import { AppHeader } from './components/AppHeader/AppHeader'
 import { LegendBar } from './components/LegendBar/LegendBar'
 import { OpenDialog } from './components/OpenDialog/OpenDialog'
-import type { Adventure, AdventureMetadata } from './types/adventure'
+import type { AdventureMetadata } from './types/adventure'
 import styles from './App.module.css'
 
 type ActiveView = 'outline' | 'canvas'
 
-function makeNewAdventure(): { adventure: Adventure; firstNodeId: string } {
-  const firstNodeId = crypto.randomUUID()
-  return {
-    firstNodeId,
-    adventure: [
-      {
-        id: firstNodeId,
-        title: 'New Adventure',
-        node_type: 'start',
-        narrativeText: '',
-        choices: [],
-      },
-    ],
-  }
-}
-
 export default function App() {
-  const repoRef = useRef(new LocalFileRepository())
-  const storeRef = useRef(createAdventureStore(repoRef.current))
+  const storeRef = useRef(createAdventureStore(new LocalFileRepository()))
 
   const [activeView, setActiveView] = useState<ActiveView>('canvas')
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null)
@@ -41,31 +24,16 @@ export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
-    const repo = repoRef.current
-    const store = storeRef.current
-    repo
-      .list()
-      .then((ids) => {
-        if (ids.length > 0) {
-          return store.getState().loadAdventure(ids[ids.length - 1]!)
-        }
-      })
-      .catch(() => {
-        // Silently ignore auto-load failures.
-      })
+    void storeRef.current.getState().autoLoadLatest()
   }, [])
 
   const handleNewAdventure = useCallback(async () => {
-    const id = crypto.randomUUID()
-    const { adventure, firstNodeId } = makeNewAdventure()
-    await repoRef.current.save(id, adventure)
-    await storeRef.current.getState().loadAdventure(id)
-    storeRef.current.getState().setSelectedNodeId(firstNodeId)
+    await storeRef.current.getState().createAdventure()
     setActiveView('canvas')
   }, [])
 
   const handleOpenDialog = useCallback(async () => {
-    const metadata = await repoRef.current.listMetadata()
+    const metadata = await storeRef.current.getState().listAdventureMetadata()
     setOpenDialogMetadata(metadata)
     setOpenDialogVisible(true)
   }, [])

@@ -1,5 +1,7 @@
+import { validateAdventure, getValidationErrors } from '../validation/validator'
 import type { Adventure, AdventureMetadata } from '../types/adventure'
 import type { AdventureRepository } from './AdventureRepository'
+import { RepositoryValidationError } from './errors'
 
 /**
  * Volatile in-memory implementation of AdventureRepository.
@@ -36,6 +38,13 @@ export class InMemoryRepository implements AdventureRepository {
   }
 
   async save(id: string, adventure: Adventure): Promise<void> {
+    if (!validateAdventure(adventure)) {
+      const errors = getValidationErrors(adventure)
+      throw new RepositoryValidationError(
+        `Cannot save: adventure document is not schema-valid. ${errors.join(' ')}`,
+        errors,
+      )
+    }
     this.store.set(id, JSON.parse(JSON.stringify(adventure)) as Adventure)
     const title = adventure[0]?.title ?? 'Untitled'
     const savedAt = new Date().toISOString()

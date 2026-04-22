@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryRepository } from './InMemoryRepository'
+import { RepositoryValidationError } from './errors'
 import { defineContractSuite } from './contract'
 import { validateAdventure } from '../validation/validator'
 import type { Adventure } from '../types/adventure'
@@ -27,6 +28,23 @@ describe('InMemoryRepository — fixture round-trips', () => {
     const loaded = await repo.load('zoo')
     expect(validateAdventure(loaded)).toBe(true)
     expect(loaded).toEqual(AStrangeDayAtTheZoo)
+  })
+})
+
+// ---------------------------------------------------------------- validation
+describe('InMemoryRepository — save validation (LSP)', () => {
+  it('throws RepositoryValidationError when the document fails schema validation', async () => {
+    const repo = new InMemoryRepository()
+    const invalid = [{ id: 'x' }] as unknown as Adventure
+    await expect(repo.save('x', invalid)).rejects.toBeInstanceOf(RepositoryValidationError)
+  })
+
+  it('populates validationErrors on the thrown error', async () => {
+    const repo = new InMemoryRepository()
+    const invalid = [{ id: 'x' }] as unknown as Adventure
+    await expect(repo.save('x', invalid)).rejects.toSatisfy(
+      (e: unknown) => e instanceof RepositoryValidationError && e.validationErrors.length > 0,
+    )
   })
 })
 

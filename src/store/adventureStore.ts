@@ -3,7 +3,7 @@ import { devtools } from 'zustand/middleware'
 import { classifyAll } from '../classifier'
 import type { ClassifierTags, NodeId } from '../classifier'
 import type { AdventureRepository } from '../repository'
-import type { Adventure, AdventureNode, Choice } from '../types/adventure'
+import type { Adventure, AdventureMetadata, AdventureNode, Choice } from '../types/adventure'
 import { isTerminalNodeType } from '../types/adventure'
 import { StoreActionError } from './errors'
 
@@ -107,10 +107,28 @@ export interface AdventureActions {
   setSelectedNodeId(id: string | null): void
 
   /**
+   * Create a new adventure with a minimal schema-valid document, persist it to
+   * the repository, load it into the store, and select the first node.
+   */
+  createAdventure(): Promise<void>
+
+  /**
+   * Load the most recently saved adventure from the repository.
+   * No-op if the repository is empty.
+   */
+  autoLoadLatest(): Promise<void>
+
+  /**
+   * Return metadata for all saved adventures, sorted by savedAt descending.
+   * Delegates to the repository so callers never need a direct repo reference.
+   */
+  listAdventureMetadata(): Promise<AdventureMetadata[]>
+
+  /**
    * Atomically create a stub node and link it as the `nextNode` of the choice
    * at `choiceIndex` on `nodeId`.
    *
-   * The stub has `node_type: 'narrative'`, an empty `narrativeText`, and an
+   * The stub has `node_type: 'decision'`, an empty `narrativeText`, and an
    * empty `choices` array.  Its id is a UUID generated via `crypto.randomUUID`.
    *
    * Both the new node and the updated choice are written in a single
@@ -248,6 +266,42 @@ export function createAdventureStore(repository: AdventureRepository) {
             throw new Error('saveAdventure: no adventure is currently loaded')
           }
           await repository.save(adventureId, document)
+        },
+
+        createAdventure: async () => {
+          const firstNodeId = crypto.randomUUID()
+          const adventure: Adventure = [
+            {
+              id: firstNodeId,
+              title: 'New Adventure',
+              node_type: 'start',
+              narrativeText: '',
+              choices: [],
+            },
+          ]
+          const id = crypto.randomUUID()
+          await repository.save(id, adventure)
+          set(
+            {
+              adventureId: id,
+              document: adventure,
+              classifierCache: classifyAll(adventure),
+              selectedNodeId: firstNodeId,
+            },
+            false,
+            'createAdventure',
+          )
+        },
+
+        autoLoadLatest: async () => {
+          const ids = await repository.list()
+          if (ids.length > 0) {
+            await get().loadAdventure(ids[ids.length - 1]!)
+          }
+        },
+
+        listAdventureMetadata: async () => {
+          return repository.listMetadata()
         },
 
         // ---- node mutations ----------------------------------------------
@@ -401,7 +455,7 @@ export function createAdventureStore(repository: AdventureRepository) {
           const stubNode: AdventureNode = {
             id: crypto.randomUUID(),
             title: 'New node',
-            node_type: 'narrative',
+            node_type: 'decision',
             narrativeText: '',
             choices: [],
           }

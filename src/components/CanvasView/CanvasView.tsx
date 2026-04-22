@@ -3,8 +3,7 @@ import { useAdventureStore } from '../../store/StoreContext'
 import type { AdventureNode } from '../../types/adventure'
 import { useCanvasLayout, edgePath, NODE_WIDTH, NODE_HEIGHT } from './useCanvasLayout'
 import type { PositionedNode } from './useCanvasLayout'
-import { announce } from '../../utils/announce'
-import { formatCanvasAnnouncement } from '../../utils/formatCanvasAnnouncement'
+import { useCanvasNavigation } from './useCanvasNavigation'
 
 // ---------------------------------------------------------------------------
 // Node colour palette  (WCAG AA contrast verified)
@@ -307,10 +306,12 @@ interface CanvasViewProps {
 export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const adventureDoc = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
-  const storeSelectedNodeId = useAdventureStore((s) => s.selectedNodeId)
-  const setStoreSelectedNodeId = useAdventureStore((s) => s.setSelectedNodeId)
 
   const { nodes, edges } = useCanvasLayout(adventureDoc, classifierCache)
+
+  // ---- Navigation (keyboard, selection, ARIA) ------------------------------
+  const { selectedIndex, handleNodeClick, handleRegionKeyDown } =
+    useCanvasNavigation(nodes, adventureDoc, onNodeActivate)
 
   // ---- Pan / zoom state ---------------------------------------------------
   const [panX, setPanX] = useState(0)
@@ -319,9 +320,6 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
 
   const isDragging = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
-
-  // ---- Selection state (visual highlight only — no focus inside SVG) -------
-  const [selectedIndex, setSelectedIndex] = useState(0)
 
   // ---- Zoom controls ------------------------------------------------------
   const handleZoomIn = useCallback(() => {
@@ -368,93 +366,6 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const handleMouseLeave = useCallback(() => {
     isDragging.current = false
   }, [])
-
-  // ---- Selection change with ARIA announcement ----------------------------
-  const handleSelectionChange = useCallback(
-    (nextIndex: number) => {
-      const node = nodes[nextIndex]
-      if (!node) return
-
-      // Capture the current store selection as "previous" before updating.
-      const prevId = storeSelectedNodeId
-      const prevDocNode = prevId ? adventureDoc.find((n) => n.id === prevId) : undefined
-
-      let choiceIndex: number | undefined
-      let totalChoices: number | undefined
-      if (prevDocNode) {
-        const idx = prevDocNode.choices.findIndex((c) => c.nextNode === node.id)
-        if (idx !== -1) {
-          choiceIndex = idx + 1
-          totalChoices = prevDocNode.choices.length
-        }
-      }
-
-      setStoreSelectedNodeId(node.id)
-      setSelectedIndex(nextIndex)
-
-      announce(
-        formatCanvasAnnouncement({
-          title: node.title,
-          nodeType: node.nodeType,
-          choiceCount: node.choiceCount,
-          isCheckpoint: node.tags.isCheckpoint,
-          previousTitle: prevDocNode?.title,
-          choiceIndex,
-          totalChoices,
-        }),
-      )
-    },
-    [nodes, adventureDoc, storeSelectedNodeId, setStoreSelectedNodeId],
-  )
-
-  // ---- Node interaction ---------------------------------------------------
-  const handleNodeClick = useCallback(
-    (nodeId: string, index: number) => {
-      setSelectedIndex(index)
-      onNodeActivate(nodeId)
-    },
-    [onNodeActivate],
-  )
-
-  /**
-   * Keyboard handler on the `<div role="region">` container.
-   *
-   * The SVG is aria-hidden so no SVG element carries tabIndex > -1.  Focus
-   * stays on the region div; arrow keys move the visual selection, and
-   * Enter / Space activate the selected node.
-   */
-  const handleRegionKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault()
-        const node = nodes[selectedIndex]
-        if (node) onNodeActivate(node.id)
-        return
-      }
-
-      let nextIndex = selectedIndex
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        e.preventDefault()
-        nextIndex = Math.min(nodes.length - 1, selectedIndex + 1)
-      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        e.preventDefault()
-        nextIndex = Math.max(0, selectedIndex - 1)
-      } else if (e.key === 'Home') {
-        e.preventDefault()
-        nextIndex = 0
-      } else if (e.key === 'End') {
-        e.preventDefault()
-        nextIndex = nodes.length - 1
-      } else {
-        return
-      }
-
-      if (nextIndex !== selectedIndex) {
-        handleSelectionChange(nextIndex)
-      }
-    },
-    [nodes, selectedIndex, onNodeActivate, handleSelectionChange],
-  )
 
   // ---- Empty state --------------------------------------------------------
   if (adventureDoc.length === 0) {
