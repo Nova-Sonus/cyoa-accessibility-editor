@@ -49,8 +49,10 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 
 ### Store
 - Single Zustand vanilla store created by `createAdventureStore(repository)`.
-- State shape: `{ adventureId, document, classifierCache }`.
+- State shape: `{ adventureId, document, classifierCache, selectedNodeId }`.
 - `classifierCache` is a `ReadonlyMap<NodeId, ClassifierTags>` recomputed after every mutation with reference-stable merging (unchanged nodes keep the same object reference to avoid unnecessary re-renders).
+- `selectedNodeId: string | null` tracks the currently selected node for the companion panel; set via `setSelectedNodeId(id)`.
+- `previousNodeId: string | null` holds the id of the node selected immediately before the current one; updated inside `setSelectedNodeId` whenever a non-null id is passed. Supplies "arrived from" context for canvas ARIA announcements.
 - Components subscribe via `useAdventureStore(selector)` — never call `store.getState()` inside React.
 - The store is distributed via `AdventureStoreProvider` / `useAdventureStore` in `src/store/StoreContext.tsx`.
 
@@ -71,6 +73,14 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - When a node transitions to a terminal type the store clears choices in the same transaction, so no `terminal-with-choices` issue is raised for that mutation. The transition is surfaced as a one-off `announce()` call ("N choices removed…"), not a persistent issue entry.
 - `IssuesPanel` accepts an optional `repositoryError?: string | null` prop (OPS-535). When set it renders a `role="alert"` paragraph above the issue list so screen readers announce it immediately, and suppresses the "No issues found." message.
 
+### Companion panel
+- `CompanionPanel` lives in `src/components/CompanionPanel/`. It is the primary editing surface in canvas-with-companion mode and must remain mounted whenever canvas mode is active — never conditionally unmount it.
+- Subscribes to `selectedNodeId`, `document`, `classifierCache`, and `updateNode` from the store via granular selectors.
+- When no node is selected it renders a placeholder ("Select a node to edit").
+- Fields rendered: `id` (labelled "Node ID", disabled), `title`, `node_type` (select, all 8 enum values), `narrativeText` (textarea). All four field components read directly from the store document and call `updateNode` on every `onChange` — no local draft state. The "without remount" guarantee comes from always deriving values from the store, not resetting local state.
+- TTS placeholder: a disabled `<button>` labelled "🔊 TTS" with `title="Coming soon"` sits to the right of the Narrative text label — layout uses a flex `narrativeHeader` row above the textarea (not positioned inside it).
+- Header shows a `TypeBadge` plus classifier tag badges: boolean tags (`isOrphan → 'orphan'`, `unreachable`, `isJunction → 'junction'`, `isBranch → 'branch'`, `isLinearLink → 'linear_link'`, `isCheckpoint → 'checkpoint'`) use the existing `ClassifierTag` component; `isTerminal`, `sceneId` (truncated to 8 chars), and finite `depth` render as inline `metaTag` spans with their own CSS custom properties (`--meta-bg`, `--meta-fg`, `--meta-border`).
+
 ### Canvas view
 - `CanvasView` lives in `src/components/CanvasView/`. It is a **read-only visual overview** — editing still happens in the outline view.
 - Layout is computed by `computeLayout()` in `useCanvasLayout.ts` (pure function, no React, fully unit-testable). Nodes are positioned using the `depth` field from the classifier cache as the column (x-axis); orphan / unreachable nodes go in a separate far-right column.
@@ -86,8 +96,11 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - `App.tsx` owns the `activeView: 'outline' | 'canvas'` state and the `pendingFocusId` plumbing between canvas activation and outline focus.
 - On mount, `App.tsx` calls `repo.list()` and auto-loads the most recently saved adventure (OPS-535).
 - The "New adventure" button in `App.tsx` creates a minimal schema-valid document, saves it to the repo, then loads it via the store.
-- `OutlineView` owns the "Save adventure" button. Save errors (including `RepositoryValidationError`) are caught there and forwarded to `IssuesPanel` as `repositoryError`. **Do not move Save to the header** — `isSaving` and `repositoryError` must remain co-located with the component that owns the action.
+- The "Open" button in `App.tsx` calls `repo.listMetadata()`, stores the result in `openDialogMetadata` state, then sets `openDialogVisible = true`. `OpenDialog` receives metadata as a prop (App.tsx owns the fetch — the dialog is purely presentational). On selection, `handleSelectAdventure` closes the dialog, calls `store.loadAdventure(id)`, and switches to outline view.
+- `OpenDialog` uses the native `<dialog>` element with `showModal()` / `close()` called from a `useEffect` that watches `isOpen`. The `cancel` event (Escape key) is intercepted with `e.preventDefault()` and routed to `onClose` so the parent controls state. **CSS rule**: `display: flex` must be scoped to `.dialog[open]` — setting it on `.dialog` directly overrides the UA `display:none` for a closed dialog and leaks headings into the accessibility tree.
+- **Save button is in `AppHeader`** (moved in OPS-544). `isSaving` and `saveError` state live in `App.tsx`; `handleSave` is defined there and passed as `onSave` to `AppHeader`. Save errors render as `role="alert"` inside the header. Do **not** move Save back to `OutlineView`.
 - The view toggle uses `role="tablist"` / `role="tab"` / `aria-selected`. Both `OutlineView` and `CanvasView` are **always mounted**; the inactive panel carries the HTML `hidden` attribute (never unmounted). This keeps `aria-controls` references valid (axe rule) and preserves view state across switches.
+- **Canvas mode is the default view** (`activeView` initialises to `'canvas'`). Canvas tabpanel is a flex row: `CompanionPanel` (320 px, fixed width) on the left, `CanvasView` (flex 1) on the right. Outline tabpanel is full-width `OutlineView`.
 
 ### UI and styling
 
@@ -100,6 +113,8 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - **Two-column layout** (`OutlineView`) — `OutlineView` renders a flex row: `nodeListColumn` (flex 1, min-width 0) + `<aside aria-label="Sidebar">` (280 px, sticky top 0). Collapses to single column below 900 px via media query. The sidebar contains three widgets: NodeIndex, IssuesPanel (card wrapper: amber when issues/error, green when clean), AssetManifest (compact chip display). **Rules of Hooks**: all `useMemo` hooks must be declared before the `if (document.length === 0)` early return — placing hooks after a conditional return causes a "Rendered more hooks" crash when the document transitions from empty to loaded.
 - **`AssetManifest` compact prop** — `<AssetManifest document={doc} compact />` renders filenames as pill chips (`chipList` / `chip` CSS module classes) with heading "Asset manifest (N)". Default (no prop) renders the original labelled list with heading "Asset manifest".
 - **"Add node" button** — at the bottom of the `<ul>` in `OutlineView`. Creates a narrative stub via `store.addNode` and sets `focusTargetId` to the new node's id.
+- **`OpenDialog`** (`src/components/OpenDialog/`) — native `<dialog>` modal for selecting a saved adventure. Props: `isOpen`, `metadata: AdventureMetadata[]`, `onSelect(id)`, `onClose`. Uses `showModal()` / `close()` imperatively. `::backdrop` provides the overlay. **Critical CSS trap**: `display: flex` must be on `.dialog[open]`, not `.dialog` — the latter overrides the UA `display:none` on a closed dialog, making its headings visible to heading-order e2e tests even when the dialog is shut.
+- **`CompanionPanel`** (`src/components/CompanionPanel/`) — primary node editing surface in canvas mode. Renders a 320 px `<aside aria-label="Node editor">`. When no node is selected, shows a placeholder. When selected: (1) header with `<h2>` node title + `TypeBadge` + classifier tag badges; (2) scrollable body with four `FieldGroup` sections — **Narrative** (Node ID, Title, Node type, Narrative text + disabled TTS), **Audio** (entry_foley, music, sounds — each an `AudioComboField`), **Gameplay** (checkpoint checkbox, activities add/delete list), **Choices** (per-choice rows with choiceText, constraint, `NodeComboField`; terminal message; + Add choice); (3) footer with Delete node (guarded by confirmation, suppressed for `start` nodes) and Node ID label. `NodeComboField` is a module-private WAI-ARIA combobox (`role="combobox"` / `role="listbox"` / `role="option"`) that shows node titles with colour dots and a "Create new node…" sentinel that creates a `decision` stub via `addNode` + `updateChoice`. All hooks must be declared **before** the `if (node == null)` early return.
 
 ---
 
@@ -159,7 +174,14 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 | 14 | OPS-540 | Node card visual redesign, stats bar, and Add Node | Done |
 | 15 | OPS-541 | Two-column layout and sidebar widgets | Done |
 | 16 | OPS-542 | Open adventure — selection dialog and metadata index | Done |
-| 17 | OPS-537 | TTS preview of narrativeText via Web Speech API | — |
-| 18 | OPS-536 | Accessibility audit and JAWS validation | — |
+| 17 | OPS-543 | UI Refinement 1 — Styles | In Progress |
+| 18 | OPS-544 | CompanionPanel full rebuild + canvas layout restructure | Done |
+| 19 | OPS-545 | Choice section is not styled | Done |
+| 20 | OPS-546 | Issues unstyled | Done |
+| 21 | OPS-547 | UI Refinement — editor functionality | In Progress |
+| 22 | OPS-548 | Next nodes should use titles not node Id | Done |
+| 23 | OPS-554 | Companion panel — core fields | Done |
+| 24 | OPS-537 | TTS preview of narrativeText via Web Speech API | — |
+| 25 | OPS-536 | Accessibility audit and JAWS validation | — |
 
-Implementation order: 538 → 539 → 540 → 541 → 542 → 537 → 536. OPS-542 done 2026-04-19. OPS-537 is next (TTS placeholder button landed in OPS-540). OPS-536 runs last when the full visual shell is in place.
+Implementation order: 538 → 539 → 540 → 541 → 542 → 543/544/545/546 → 547/548 → 554 → 544 → 537 → 536. OPS-545 done 2026-04-19: styled Choices section + created ChoiceRow.module.css. OPS-546 done 2026-04-19: created IssuesPanel.module.css. OPS-548 done 2026-04-19: nextNode select shows node titles not IDs. OPS-554 done 2026-04-20: `CompanionPanel` core fields; `selectedNodeId` + `setSelectedNodeId` + `previousNodeId` added to store. OPS-544 done 2026-04-20: CompanionPanel full rebuild (4 FieldGroup sections, NodeComboField, AudioComboField, ActivitiesList, delete-with-confirm footer); canvas default view; Save moved to AppHeader with `role="alert"` error; canvas tabpanel = CompanionPanel (320 px) + CanvasView flex row.

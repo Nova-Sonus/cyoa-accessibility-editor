@@ -1,0 +1,51 @@
+/* Root: fills the flex slot in canvasPanel (CompanionPanel + CanvasView row) */
+.canvasView {
+  position: relative; /* containing block for .srOnly */
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Zoom / pan toolbar */
+.toolbar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 8px;
+  align-items: center;
+}
+
+/* Legend row — wraps CanvasLegend to prevent flex shrink */
+.legendWrapper {
+  flex-shrink: 0;
+}
+
+/* SVG canvas region: grows to fill remaining vertical space */
+.graphRegion {
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+/* SVG fills the region exactly */
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Accessible node list — screen-reader-only alternative to the visual graph */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

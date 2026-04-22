@@ -4,6 +4,7 @@ import type { AdventureNode } from '../../types/adventure'
 import { useCanvasLayout, edgePath, NODE_WIDTH, NODE_HEIGHT } from './useCanvasLayout'
 import type { PositionedNode } from './useCanvasLayout'
 import { useCanvasNavigation } from './useCanvasNavigation'
+import styles from './CanvasView.module.css'
 
 // ---------------------------------------------------------------------------
 // Node colour palette  (WCAG AA contrast verified)
@@ -377,12 +378,12 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const graphLabel = `Adventure graph: ${nodes.length} nodes, ${edgeCount} connections. Use arrow keys to navigate nodes. Press Enter to open a node in outline view.`
 
   return (
-    <div>
+    <div className={styles.canvasView}>
       {/* Zoom / pan toolbar */}
       <div
         role="toolbar"
         aria-label="Canvas controls"
-        style={{ display: 'flex', gap: '8px', padding: '4px 0 8px', alignItems: 'center' }}
+        className={styles.toolbar}
       >
         <button type="button" onClick={handleZoomIn} aria-label="Zoom in">
           +
@@ -398,7 +399,9 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         </span>
       </div>
 
-      <CanvasLegend />
+      <div className={styles.legendWrapper}>
+        <CanvasLegend />
+      </div>
 
       {/* SVG canvas — role="region" required for aria-label; tabIndex makes it
           the keyboard entry point so focus never enters the aria-hidden SVG. */}
@@ -407,11 +410,12 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         aria-label={graphLabel}
         tabIndex={0}
         onKeyDown={handleRegionKeyDown}
-        style={{ overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+        className={styles.graphRegion}
       >
         <svg
           width="100%"
-          style={{ display: 'block', minHeight: '400px', cursor: isDragging.current ? 'grabbing' : 'grab' }}
+          className={styles.svg}
+          style={{ cursor: isDragging.current ? 'grabbing' : 'grab' }}
           aria-hidden="true"
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
@@ -494,8 +498,8 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         </svg>
       </div>
 
-      {/* Accessible node list — screen reader alternative to the visual graph */}
-      <section aria-label="Node list (screen reader summary)">
+      {/* Accessible node list — screen reader alternative; visually hidden */}
+      <section aria-label="Node list (screen reader summary)" className={styles.srOnly}>
         <h2 style={{ fontSize: '14px', margin: '16px 0 4px' }}>
           Nodes ({nodes.length})
         </h2>
