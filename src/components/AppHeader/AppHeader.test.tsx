@@ -119,3 +119,76 @@ describe('AppHeader — tab click', () => {
     expect(onViewChange).toHaveBeenCalledWith('canvas')
   })
 })
+
+// Save button
+describe('AppHeader — Save button', () => {
+  it('renders a Save button when onSave is provided', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+  })
+
+  it('does not render a Save button when onSave is omitted', () => {
+    renderHeader()
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+  })
+
+  it('calls onSave when clicked', () => {
+    const onSave = vi.fn()
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onSave={onSave}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSave).toHaveBeenCalledOnce()
+  })
+
+  it('disables Save button when isSaving is true', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onSave={vi.fn()}
+        isSaving
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+  })
+
+  it('shows save error as role="alert" when saveError is set', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onSave={vi.fn()}
+        saveError="Failed to save."
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to save.')
+  })
+
+  it('does not render an alert when saveError is null', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onSave={vi.fn()}
+        saveError={null}
+      />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})

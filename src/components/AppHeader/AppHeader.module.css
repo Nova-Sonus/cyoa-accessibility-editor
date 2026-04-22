@@ -93,3 +93,32 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.saveButton {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.saveError {
+  position: absolute;
+  top: 100%;
+  right: 1.25rem;
+  margin: 0;
+  padding: 0.375rem 0.75rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  font-size: 0.8125rem;
+  z-index: 99;
+}

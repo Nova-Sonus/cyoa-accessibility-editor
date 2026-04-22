@@ -3,6 +3,8 @@ import { useAdventureStore } from '../../store/StoreContext'
 import type { AdventureNode } from '../../types/adventure'
 import { useCanvasLayout, edgePath, NODE_WIDTH, NODE_HEIGHT } from './useCanvasLayout'
 import type { PositionedNode } from './useCanvasLayout'
+import { announce } from '../../utils/announce'
+import { formatCanvasAnnouncement } from '../../utils/formatCanvasAnnouncement'
 
 // ---------------------------------------------------------------------------
 // Node colour palette  (WCAG AA contrast verified)
@@ -305,6 +307,8 @@ interface CanvasViewProps {
 export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const adventureDoc = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
+  const storeSelectedNodeId = useAdventureStore((s) => s.selectedNodeId)
+  const setStoreSelectedNodeId = useAdventureStore((s) => s.setSelectedNodeId)
 
   const { nodes, edges } = useCanvasLayout(adventureDoc, classifierCache)
 
@@ -365,6 +369,44 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
     isDragging.current = false
   }, [])
 
+  // ---- Selection change with ARIA announcement ----------------------------
+  const handleSelectionChange = useCallback(
+    (nextIndex: number) => {
+      const node = nodes[nextIndex]
+      if (!node) return
+
+      // Capture the current store selection as "previous" before updating.
+      const prevId = storeSelectedNodeId
+      const prevDocNode = prevId ? adventureDoc.find((n) => n.id === prevId) : undefined
+
+      let choiceIndex: number | undefined
+      let totalChoices: number | undefined
+      if (prevDocNode) {
+        const idx = prevDocNode.choices.findIndex((c) => c.nextNode === node.id)
+        if (idx !== -1) {
+          choiceIndex = idx + 1
+          totalChoices = prevDocNode.choices.length
+        }
+      }
+
+      setStoreSelectedNodeId(node.id)
+      setSelectedIndex(nextIndex)
+
+      announce(
+        formatCanvasAnnouncement({
+          title: node.title,
+          nodeType: node.nodeType,
+          choiceCount: node.choiceCount,
+          isCheckpoint: node.tags.isCheckpoint,
+          previousTitle: prevDocNode?.title,
+          choiceIndex,
+          totalChoices,
+        }),
+      )
+    },
+    [nodes, adventureDoc, storeSelectedNodeId, setStoreSelectedNodeId],
+  )
+
   // ---- Node interaction ---------------------------------------------------
   const handleNodeClick = useCallback(
     (nodeId: string, index: number) => {
@@ -407,9 +449,11 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         return
       }
 
-      setSelectedIndex(nextIndex)
+      if (nextIndex !== selectedIndex) {
+        handleSelectionChange(nextIndex)
+      }
     },
-    [nodes, selectedIndex, onNodeActivate],
+    [nodes, selectedIndex, onNodeActivate, handleSelectionChange],
   )
 
   // ---- Empty state --------------------------------------------------------

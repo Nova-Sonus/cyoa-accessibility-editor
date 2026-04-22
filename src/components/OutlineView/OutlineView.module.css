@@ -92,38 +92,6 @@
   color: #475569;
 }
 
-/* Save button */
-.saveWrapper {
-  padding-bottom: 16px;
-}
-
-.saveButton {
-  padding: 8px 16px;
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: 'DM Sans', system-ui, sans-serif;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: background 0.15s;
-}
-
-.saveButton:hover {
-  background: #1d4ed8;
-}
-
-.saveButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.saveButton:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
-
 /* Sidebar widgets */
 .sidebarWidget {
   background: #fff;

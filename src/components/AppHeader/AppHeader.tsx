@@ -9,6 +9,9 @@ interface AppHeaderProps {
   onViewChange: (view: ActiveView) => void
   onNewAdventure: () => void
   onOpen?: () => void
+  onSave?: () => void
+  isSaving?: boolean
+  saveError?: string | null
 }
 
 const TABS: { id: ActiveView; label: string; panelId: string; tabId: string }[] = [
@@ -16,7 +19,15 @@ const TABS: { id: ActiveView; label: string; panelId: string; tabId: string }[] 
   { id: 'canvas',  label: 'Canvas',  panelId: 'panel-canvas',  tabId: 'tab-canvas'  },
 ]
 
-export function AppHeader({ activeView, onViewChange, onNewAdventure, onOpen }: AppHeaderProps) {
+export function AppHeader({
+  activeView,
+  onViewChange,
+  onNewAdventure,
+  onOpen,
+  onSave,
+  isSaving = false,
+  saveError = null,
+}: AppHeaderProps) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   const handleKeyDown = useCallback(
@@ -76,7 +87,23 @@ export function AppHeader({ activeView, onViewChange, onNewAdventure, onOpen }: 
         >
           Open
         </button>
+        {onSave !== undefined && (
+          <button
+            type="button"
+            className={`${styles.actionButton} ${styles.saveButton}`}
+            onClick={onSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+        )}
       </div>
+
+      {saveError != null && (
+        <p role="alert" className={styles.saveError}>
+          {saveError}
+        </p>
+      )}
     </header>
   )
 }

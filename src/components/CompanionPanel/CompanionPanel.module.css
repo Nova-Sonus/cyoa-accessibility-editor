@@ -1,10 +1,12 @@
 .panel {
   display: flex;
   flex-direction: column;
+  width: 320px;
+  flex-shrink: 0;
   height: 100%;
   background: #ffffff;
   border-right: 1px solid #e2e8f0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .placeholder {
@@ -15,13 +17,25 @@
   text-align: center;
 }
 
+/* Header */
 .header {
   padding: 12px 16px;
   background: var(--node-bg, #f8fafc);
   border-bottom: 2px solid var(--node-border, #e2e8f0);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.nodeTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .typeRow {
@@ -48,17 +62,24 @@
   line-height: 18px;
 }
 
-.fields {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+/* Scrollable body */
+.body {
+  flex: 1;
+  overflow-y: auto;
 }
 
+/* Section fields */
+.sectionFields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+/* Narrative textarea */
 .narrativeField {
   display: flex;
   flex-direction: column;
-  margin-bottom: 12px;
 }
 
 .narrativeHeader {
@@ -93,7 +114,7 @@
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
@@ -107,4 +128,350 @@
   outline: none;
   border-color: #94a3b8;
   box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+
+/* Checkbox */
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+/* Terminal message */
+.terminalMessage {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Empty choices */
+.emptyChoices {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Add choice button */
+.addChoiceButton {
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.addChoiceButton:hover {
+  background: #e2e8f0;
+}
+
+/* Choice row */
+.choiceRow {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f8fafc;
+}
+
+.choiceRowHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.choiceRowLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.choiceDeleteBtn {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid #fca5a5;
+  border-radius: 3px;
+  color: #dc2626;
+  cursor: pointer;
+  line-height: 16px;
+}
+
+.choiceDeleteBtn:hover {
+  background: #fef2f2;
+}
+
+/* NodeComboField / AudioComboField shared styles */
+.comboField {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.comboLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.comboInputWrapper {
+  position: relative;
+  display: flex;
+}
+
+.comboInput {
+  flex: 1;
+  padding: 5px 28px 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #1e293b;
+  background: #ffffff;
+  min-width: 0;
+}
+
+.comboInput:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+
+.comboChevron {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.comboListbox {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 4px 0;
+}
+
+.comboOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 13px;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.comboOption:hover,
+.comboOptionActive {
+  background: #f1f5f9;
+}
+
+.comboOptionCreate {
+  color: #2563eb;
+  font-style: italic;
+}
+
+.comboDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-color, #94a3b8);
+  flex-shrink: 0;
+}
+
+/* Activities */
+.activitiesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activitiesHeading {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.activitiesEmpty {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+
+.activitiesUl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.activityItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+
+.activityText {
+  font-size: 13px;
+  color: #334155;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityDeleteBtn {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid #fca5a5;
+  border-radius: 3px;
+  color: #dc2626;
+  cursor: pointer;
+  line-height: 16px;
+}
+
+.activityDeleteBtn:hover {
+  background: #fef2f2;
+}
+
+.activityAddRow {
+  display: flex;
+  gap: 6px;
+}
+
+.activityInput {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #1e293b;
+  min-width: 0;
+}
+
+.activityInput:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+
+.activityAddBtn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.activityAddBtn:hover {
+  background: #1d4ed8;
+}
+
+/* Footer */
+.footer {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.footerButton {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.footerButton:hover {
+  background: #e2e8f0;
+}
+
+.footerButtonDanger {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+.footerButtonDanger:hover {
+  background: #fee2e2;
+}
+
+.footerNodeId {
+  font-size: 10px;
+  color: #94a3b8;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+  margin-left: auto;
+}
+
+.deleteConfirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.deleteConfirmText {
+  font-size: 12px;
+  color: #dc2626;
+  font-weight: 500;
 }

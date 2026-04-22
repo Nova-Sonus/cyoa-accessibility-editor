@@ -86,6 +86,30 @@ describe('OpenDialog', () => {
     expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled()
   })
 
+  it('calls close when isOpen transitions from true to false', () => {
+    const { rerender } = renderDialog({ isOpen: true })
+    // Set dialog.open so the close path is exercised
+    const dialog = document.querySelector('dialog')!
+    dialog.setAttribute('open', '')
+    rerender(
+      <OpenDialog
+        isOpen={false}
+        metadata={sampleMetadata}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(HTMLDialogElement.prototype.close).toHaveBeenCalled()
+  })
+
+  it('calls onClose when native cancel event fires (Escape key)', () => {
+    const onClose = vi.fn()
+    renderDialog({ onClose })
+    const dialog = document.querySelector('dialog')!
+    fireEvent(dialog, new Event('cancel', { cancelable: true }))
+    expect(onClose).toHaveBeenCalled()
+  })
+
   it('has no axe violations when open with metadata', async () => {
     const { container } = renderDialog()
     const results = await axe(container)

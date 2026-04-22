@@ -31,6 +31,13 @@ export interface AdventureState {
 
   /** The id of the currently selected node, or null when no node is selected. */
   selectedNodeId: string | null
+
+  /**
+   * The id of the node that was selected immediately before the current one.
+   * Updated each time `setSelectedNodeId` is called with a non-null id.
+   * Supplies "arrived from" context for canvas ARIA announcements.
+   */
+  previousNodeId: string | null
 }
 
 /** Async and sync actions exposed to consumers. */
@@ -204,11 +211,20 @@ export function createAdventureStore(repository: AdventureRepository) {
         document: [],
         classifierCache: new Map<NodeId, ClassifierTags>(),
         selectedNodeId: null,
+        previousNodeId: null,
 
         // ---- selection ---------------------------------------------------
 
         setSelectedNodeId: (id) => {
-          set({ selectedNodeId: id }, false, 'setSelectedNodeId')
+          if (id !== null) {
+            set(
+              { selectedNodeId: id, previousNodeId: get().selectedNodeId },
+              false,
+              'setSelectedNodeId',
+            )
+          } else {
+            set({ selectedNodeId: null }, false, 'setSelectedNodeId')
+          }
         },
 
         // ---- async persistence -------------------------------------------

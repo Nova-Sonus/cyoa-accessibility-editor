@@ -39,7 +39,6 @@ const visuallyHiddenStyle: React.CSSProperties = {
 export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps = {}) {
   const document = useAdventureStore((s) => s.document)
   const classifierCache = useAdventureStore((s) => s.classifierCache)
-  const saveAdventure = useAdventureStore((s) => s.saveAdventure)
   const addNode = useAdventureStore((s) => s.addNode)
 
   // ---- Announcement state -------------------------------------------------
@@ -98,24 +97,6 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
     },
     [document, announce],
   )
-
-  // ---- Save adventure -----------------------------------------------------
-  const [repositoryError, setRepositoryError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-
-  const handleSave = useCallback(async () => {
-    setRepositoryError(null)
-    setIsSaving(true)
-    try {
-      await saveAdventure()
-      announce('Adventure saved.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed.'
-      setRepositoryError(message)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [saveAdventure, announce])
 
   // ---- Focus management — new node or issue activation -------------------
   const [focusTargetId, setFocusTargetId] = useState<string | null>(null)
@@ -264,16 +245,6 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
           </button>
         </div>
 
-        <div className={styles.saveWrapper}>
-          <button
-            type="button"
-            className={styles.saveButton}
-            onClick={() => { void handleSave() }}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving…' : 'Save adventure'}
-          </button>
-        </div>
       </div>
 
       {/* Sidebar */}
@@ -283,11 +254,10 @@ export function OutlineView({ focusNodeId, onFocusConsumed }: OutlineViewProps =
           <NodeIndex nodes={nodeIndexEntries} onActivate={handleActivateIssue} />
         </div>
 
-        <div className={`${styles.sidebarWidget} ${issues.length > 0 || repositoryError ? styles.sidebarWidgetAmber : styles.sidebarWidgetGreen}`}>
+        <div className={`${styles.sidebarWidget} ${issues.length > 0 ? styles.sidebarWidgetAmber : styles.sidebarWidgetGreen}`}>
           <IssuesPanel
             issues={issues}
             onActivate={handleActivateIssue}
-            repositoryError={repositoryError}
           />
         </div>
 
