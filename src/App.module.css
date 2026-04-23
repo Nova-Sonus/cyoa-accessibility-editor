@@ -17,7 +17,12 @@
 
 .canvasPanel {
   flex: 1;
+  overflow: hidden;
+}
+
+/* display:flex on the same element as [hidden] overrides the UA display:none.
+   Scope the flex-container layout to the non-hidden state only. */
+.canvasPanel:not([hidden]) {
   display: flex;
   flex-direction: row;
-  overflow: hidden;
 }
