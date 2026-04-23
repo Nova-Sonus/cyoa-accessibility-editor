@@ -164,6 +164,8 @@ test.describe('axe-core — outline view', () => {
 
   test('no violations with a single-node adventure', async ({ page }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
+    await page.getByRole('tab', { name: 'Outline' }).click()
+    await expect(page.getByRole('list', { name: 'Adventure outline' })).toBeVisible()
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
       .analyze()
@@ -174,6 +176,8 @@ test.describe('axe-core — outline view', () => {
     page,
   }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
+    await page.getByRole('tab', { name: 'Outline' }).click()
+    await expect(page.getByRole('list', { name: 'Adventure outline' })).toBeVisible()
     const results = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
       .analyze()
@@ -182,6 +186,7 @@ test.describe('axe-core — outline view', () => {
 
   test('no violations with expanded node details', async ({ page }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
+    await page.getByRole('tab', { name: 'Outline' }).click()
     // Open the first node's accordion
     await page.locator('ul[aria-label="Adventure outline"] > li > button[aria-expanded]').first().click()
     await page.waitForTimeout(100)
@@ -197,6 +202,7 @@ test.describe('axe-core — outline view', () => {
     await page.reload()
     await page.waitForLoadState('networkidle')
     await page.getByRole('button', { name: 'New adventure' }).click()
+    await page.getByRole('tab', { name: 'Outline' }).click()
     await expect(
       page.getByRole('list', { name: 'Adventure outline' }),
     ).toBeVisible()
@@ -274,6 +280,7 @@ test.describe('Landmark and heading structure', () => {
     page,
   }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
+    await page.getByRole('tab', { name: 'Outline' }).click()
     await expect(page.getByRole('region', { name: 'Issues' })).toBeVisible()
     await expect(
       page.getByRole('heading', { name: 'Issues', level: 2 }),
@@ -284,6 +291,7 @@ test.describe('Landmark and heading structure', () => {
     page,
   }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
+    await page.getByRole('tab', { name: 'Outline' }).click()
     await expect(
       page.getByRole('region', { name: 'Asset manifest' }),
     ).toBeVisible()
@@ -346,19 +354,19 @@ test.describe('ARIA patterns', () => {
     const outlineTab = page.getByRole('tab', { name: 'Outline' })
     const canvasTab = page.getByRole('tab', { name: 'Canvas' })
 
-    // Outline is active on load
-    await expect(outlineTab).toHaveAttribute('aria-selected', 'true')
-    await expect(canvasTab).toHaveAttribute('aria-selected', 'false')
-
-    // Switch to canvas
-    await canvasTab.click()
-    await expect(outlineTab).toHaveAttribute('aria-selected', 'false')
+    // Canvas is active on load (default view)
     await expect(canvasTab).toHaveAttribute('aria-selected', 'true')
+    await expect(outlineTab).toHaveAttribute('aria-selected', 'false')
 
-    // Switch back
+    // Switch to outline
     await outlineTab.click()
     await expect(outlineTab).toHaveAttribute('aria-selected', 'true')
     await expect(canvasTab).toHaveAttribute('aria-selected', 'false')
+
+    // Switch back to canvas
+    await canvasTab.click()
+    await expect(canvasTab).toHaveAttribute('aria-selected', 'true')
+    await expect(outlineTab).toHaveAttribute('aria-selected', 'false')
   })
 
   test('canvas zoom percentage is in an aria-live region', async ({
@@ -445,7 +453,7 @@ test.describe('Keyboard navigation — outline view', () => {
       const text = await page.evaluate(
         () => (document.activeElement as HTMLElement).textContent?.trim(),
       )
-      if (text === 'Save adventure') {
+      if (text === 'Save') {
         found = true
         break
       }
@@ -520,19 +528,35 @@ test.describe('Keyboard navigation — canvas view', () => {
     expect(found).toBe(true)
   })
 
-  test('clicking a node in the accessible list fires activation', async ({
+  test('activating a node via the accessible list selects it in the companion panel', async ({
     page,
   }) => {
-    // Click the Start Node button in the accessible list
-    const nodeBtn = page
-      .getByRole('region', { name: /Node list/i })
-      .getByRole('button', { name: /Start Node/i })
-    await nodeBtn.click()
+    // Tab to the first button in the accessible node list and press Enter.
+    // Force-click is not viable since the list is in a visually-hidden srOnly region;
+    // keyboard activation (how screen readers work) is the correct interaction model.
+    let activated = false
+    for (let i = 0; i < 30; i++) {
+      await page.keyboard.press('Tab')
+      const info = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement
+        const section = el.closest('section[aria-label]')
+        return {
+          tag: el.tagName,
+          inNodeList: section?.getAttribute('aria-label')?.includes('Node list') ?? false,
+        }
+      })
+      if (info.tag === 'BUTTON' && info.inNodeList) {
+        await page.keyboard.press('Enter')
+        activated = true
+        break
+      }
+    }
+    expect(activated).toBe(true)
 
-    // Should switch to outline view and focus the title input
+    // setSelectedNodeId is called — CompanionPanel shows the node's title
     await expect(
-      page.getByRole('tab', { name: 'Outline' }),
-    ).toHaveAttribute('aria-selected', 'true')
+      page.getByRole('complementary', { name: 'Node editor' }).getByRole('heading', { level: 2 }),
+    ).toContainText('Start Node')
   })
 
   test('zoom controls are keyboard accessible', async ({ page }) => {
@@ -565,21 +589,18 @@ test.describe('Focus management', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('"New adventure" moves focus to the title input', async ({ page }) => {
+  test('"New adventure" opens canvas view with the graph visible', async ({ page }) => {
     await page.getByRole('button', { name: 'New adventure' }).click()
 
-    // Wait for focus to settle on the title text input
-    await page.waitForFunction(() => {
-      const el = document.activeElement as HTMLInputElement | null
-      return el?.tagName === 'INPUT' && el.type === 'text'
-    })
+    // New adventure sets canvas as the active view
+    await expect(
+      page.getByRole('tab', { name: 'Canvas' }),
+    ).toHaveAttribute('aria-selected', 'true')
 
-    const focused = await page.evaluate(() => {
-      const el = document.activeElement as HTMLInputElement
-      return { tag: el.tagName, type: el.type }
-    })
-    expect(focused.tag).toBe('INPUT')
-    expect(focused.type).toBe('text')
+    // The canvas graph region should be visible
+    await expect(
+      page.getByRole('region', { name: /Adventure graph/i }),
+    ).toBeVisible()
   })
 
   test('activating an issue button moves focus to the offending node title', async ({
@@ -587,6 +608,7 @@ test.describe('Focus management', () => {
   }) => {
     // Seed an adventure with an orphan — deriveIssues will raise an orphan issue
     await seedAdventure(page, 'multi', ADV_MULTI)
+    await page.getByRole('tab', { name: 'Outline' }).click()
 
     // Wait for issues to render
     const issuesList = page.locator('section[aria-label="Issues"] ul')
@@ -610,38 +632,23 @@ test.describe('Focus management', () => {
     expect(focused.type).toBe('text')
   })
 
-  test('canvas node activation switches view and focuses title input', async ({
+  test('canvas keyboard navigation activates a node in the companion panel', async ({
     page,
   }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
     await page.getByRole('tab', { name: 'Canvas' }).click()
+    const graphRegion = page.getByRole('region', { name: /Adventure graph/i })
+    await expect(graphRegion).toBeVisible()
+
+    // Focus the canvas graph region (roving-tabIndex composite widget, selectedIndex starts at 0)
+    // and press Enter to activate the first node (Start Node in ADV_MULTI)
+    await graphRegion.focus()
+    await page.keyboard.press('Enter')
+
+    // setSelectedNodeId is called — CompanionPanel shows the node's title
     await expect(
-      page.getByRole('region', { name: /Adventure graph/i }),
-    ).toBeVisible()
-
-    // Activate via the accessible node list
-    const nodeBtn = page
-      .getByRole('region', { name: /Node list/i })
-      .getByRole('button', { name: /Start Node/i })
-    await nodeBtn.click()
-
-    // View should switch to outline
-    await expect(
-      page.getByRole('tab', { name: 'Outline' }),
-    ).toHaveAttribute('aria-selected', 'true')
-
-    // Focus should land on a title text input
-    await page.waitForFunction(() => {
-      const el = document.activeElement as HTMLInputElement | null
-      return el?.tagName === 'INPUT' && el.type === 'text'
-    })
-
-    const focused = await page.evaluate(() => {
-      const el = document.activeElement as HTMLInputElement
-      return { tag: el.tagName, type: el.type }
-    })
-    expect(focused.tag).toBe('INPUT')
-    expect(focused.type).toBe('text')
+      page.getByRole('complementary', { name: 'Node editor' }).getByRole('heading', { level: 2 }),
+    ).toContainText('Start Node')
   })
 })
 
@@ -745,6 +752,7 @@ test.describe('Issues panel — structural guarantees', () => {
     page,
   }) => {
     await seedAdventure(page, 'single', ADV_SINGLE)
+    await page.getByRole('tab', { name: 'Outline' }).click()
     const panel = page.getByRole('region', { name: 'Issues' })
     await expect(panel).toBeVisible()
     await expect(panel).toContainText('No issues found.')
@@ -752,6 +760,7 @@ test.describe('Issues panel — structural guarantees', () => {
 
   test('issues panel lists orphan issues as buttons', async ({ page }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
+    await page.getByRole('tab', { name: 'Outline' }).click()
     const panel = page.getByRole('region', { name: 'Issues' })
     await expect(panel).toBeVisible()
 
