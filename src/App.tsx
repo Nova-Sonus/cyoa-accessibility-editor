@@ -8,6 +8,7 @@ import { CompanionPanel } from './components/CompanionPanel/CompanionPanel'
 import { AppHeader } from './components/AppHeader/AppHeader'
 import { LegendBar } from './components/LegendBar/LegendBar'
 import { OpenDialog } from './components/OpenDialog/OpenDialog'
+import { validateAdventure, getValidationErrors } from './validation/validator'
 import type { AdventureMetadata } from './types/adventure'
 import styles from './App.module.css'
 
@@ -22,6 +23,8 @@ export default function App() {
   const [openDialogMetadata, setOpenDialogMetadata] = useState<AdventureMetadata[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void storeRef.current.getState().autoLoadLatest()
@@ -42,6 +45,40 @@ export default function App() {
     setOpenDialogVisible(false)
     await storeRef.current.getState().loadAdventure(id)
     setActiveView('canvas')
+  }, [])
+
+  const handleImport = useCallback(() => {
+    setImportError(null)
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    try {
+      const text = await file.text()
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        setImportError('Import failed: file is not valid JSON.')
+        return
+      }
+      if (!validateAdventure(parsed)) {
+        const errors = getValidationErrors(parsed)
+        setImportError(`Import failed: ${errors.join(' ')}`)
+        return
+      }
+      const displayTitle = file.name
+        .replace(/\.json$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+      storeRef.current.getState().importAdventure(parsed, displayTitle)
+      setActiveView('canvas')
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Import failed.')
+    }
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -74,9 +111,11 @@ export default function App() {
           onViewChange={setActiveView}
           onNewAdventure={() => { void handleNewAdventure() }}
           onOpen={() => { void handleOpenDialog() }}
+          onImport={handleImport}
           onSave={() => { void handleSave() }}
           isSaving={isSaving}
           saveError={saveError}
+          importError={importError}
         />
         <LegendBar />
 
@@ -108,6 +147,16 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        className={styles.hiddenInput}
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => { void handleFileChange(e) }}
+      />
 
       <OpenDialog
         isOpen={openDialogVisible}

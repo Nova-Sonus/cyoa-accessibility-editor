@@ -76,7 +76,7 @@ export class LocalFileRepository implements AdventureRepository {
     return JSON.parse(raw) as Adventure
   }
 
-  async save(id: string, adventure: Adventure): Promise<void> {
+  async save(id: string, adventure: Adventure, displayTitle?: string): Promise<void> {
     if (!validateAdventure(adventure)) {
       const errors = getValidationErrors(adventure)
       throw new RepositoryValidationError(
@@ -87,7 +87,7 @@ export class LocalFileRepository implements AdventureRepository {
 
     localStorage.setItem(docKey(id), JSON.stringify(adventure))
 
-    const title = adventure[0]?.title ?? 'Untitled'
+    const title = displayTitle ?? adventure[0]?.title ?? 'Untitled'
     const savedAt = new Date().toISOString()
     const current = await this.listMetadata()
     const existingIndex = current.findIndex((m) => m.id === id)

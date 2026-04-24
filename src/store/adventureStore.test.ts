@@ -526,6 +526,74 @@ describe('autoLoadLatest', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// importAdventure
+// ---------------------------------------------------------------------------
+
+describe('importAdventure', () => {
+  it('sets the document to the provided adventure', () => {
+    const store = makeStore()
+    const doc = [makeNode('a'), makeNode('b')]
+    store.getState().importAdventure(doc)
+    expect(store.getState().document).toEqual(doc)
+  })
+
+  it('assigns a fresh non-null adventureId', () => {
+    const store = makeStore()
+    store.getState().importAdventure([makeNode('a')])
+    expect(store.getState().adventureId).not.toBeNull()
+  })
+
+  it('assigns a different adventureId on each call', () => {
+    const store = makeStore()
+    store.getState().importAdventure([makeNode('a')])
+    const id1 = store.getState().adventureId
+    store.getState().importAdventure([makeNode('b')])
+    const id2 = store.getState().adventureId
+    expect(id1).not.toEqual(id2)
+  })
+
+  it('resets selectedNodeId and previousNodeId to null', async () => {
+    const store = await makeStoreWithAdventure([makeNode('a')])
+    store.getState().setSelectedNodeId('a')
+    store.getState().importAdventure([makeNode('b')])
+    expect(store.getState().selectedNodeId).toBeNull()
+    expect(store.getState().previousNodeId).toBeNull()
+  })
+
+  it('updates classifierCache from the new document', () => {
+    const store = makeStore()
+    store.getState().importAdventure([makeNode('x', { node_type: 'start' })])
+    expect(store.getState().classifierCache.has('x')).toBe(true)
+  })
+
+  it('does not persist to the repository', async () => {
+    const repo = new InMemoryRepository()
+    const store = createAdventureStore(repo)
+    store.getState().importAdventure([makeNode('a', { node_type: 'start' })])
+    const ids = await repo.list()
+    expect(ids).toHaveLength(0)
+  })
+
+  it('stores the displayTitle so saveAdventure uses it as the metadata title', async () => {
+    const repo = new InMemoryRepository()
+    const store = createAdventureStore(repo)
+    store.getState().importAdventure([makeNode('a', { node_type: 'start', title: 'Node Title' })], 'Caves Of Bane')
+    await store.getState().saveAdventure()
+    const entry = (await repo.listMetadata())[0]
+    expect(entry!.title).toBe('Caves Of Bane')
+  })
+
+  it('clears adventureDisplayTitle when loadAdventure is called afterwards', async () => {
+    const repo = new InMemoryRepository()
+    await repo.save('existing', [makeNode('x', { node_type: 'start' })])
+    const store = createAdventureStore(repo)
+    store.getState().importAdventure([makeNode('a', { node_type: 'start' })], 'Some Title')
+    await store.getState().loadAdventure('existing')
+    expect(store.getState().adventureDisplayTitle).toBeNull()
+  })
+})
+
 describe('listAdventureMetadata', () => {
   it('returns metadata from the repository', async () => {
     const repo = new InMemoryRepository()

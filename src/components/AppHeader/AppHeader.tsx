@@ -9,9 +9,11 @@ interface AppHeaderProps {
   onViewChange: (view: ActiveView) => void
   onNewAdventure: () => void
   onOpen?: () => void
+  onImport?: () => void
   onSave?: () => void
   isSaving?: boolean
   saveError?: string | null
+  importError?: string | null
 }
 
 const TABS: { id: ActiveView; label: string; panelId: string; tabId: string }[] = [
@@ -24,9 +26,11 @@ export function AppHeader({
   onViewChange,
   onNewAdventure,
   onOpen,
+  onImport,
   onSave,
   isSaving = false,
   saveError = null,
+  importError = null,
 }: AppHeaderProps) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
@@ -87,6 +91,15 @@ export function AppHeader({
         >
           Open
         </button>
+        {onImport !== undefined && (
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={onImport}
+          >
+            Import from file
+          </button>
+        )}
         {onSave !== undefined && (
           <button
             type="button"
@@ -102,6 +115,11 @@ export function AppHeader({
       {saveError != null && (
         <p role="alert" className={styles.saveError}>
           {saveError}
+        </p>
+      )}
+      {importError != null && (
+        <p role="alert" className={styles.saveError}>
+          {importError}
         </p>
       )}
     </header>

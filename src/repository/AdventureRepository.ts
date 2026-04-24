@@ -25,8 +25,13 @@ export interface AdventureRepository {
    * Persists `adventure` under `id`, overwriting any existing document.
    * The repository stores an isolated copy; subsequent mutation of the
    * caller's reference does not affect the stored data.
+   *
+   * `displayTitle`, when provided, is stored as the human-readable adventure
+   * name in the metadata index instead of deriving it from the first node's
+   * title. Use this when the caller has a more meaningful name (e.g. the
+   * original filename of an imported adventure).
    */
-  save(id: string, adventure: Adventure): Promise<void>
+  save(id: string, adventure: Adventure, displayTitle?: string): Promise<void>
 
   /**
    * Removes the adventure stored under `id`.

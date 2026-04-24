@@ -37,7 +37,7 @@ export class InMemoryRepository implements AdventureRepository {
     return JSON.parse(JSON.stringify(adventure)) as Adventure
   }
 
-  async save(id: string, adventure: Adventure): Promise<void> {
+  async save(id: string, adventure: Adventure, displayTitle?: string): Promise<void> {
     if (!validateAdventure(adventure)) {
       const errors = getValidationErrors(adventure)
       throw new RepositoryValidationError(
@@ -46,7 +46,7 @@ export class InMemoryRepository implements AdventureRepository {
       )
     }
     this.store.set(id, JSON.parse(JSON.stringify(adventure)) as Adventure)
-    const title = adventure[0]?.title ?? 'Untitled'
+    const title = displayTitle ?? adventure[0]?.title ?? 'Untitled'
     const savedAt = new Date().toISOString()
     this.metadata.set(id, { id, title, savedAt })
   }

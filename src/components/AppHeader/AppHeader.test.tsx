@@ -120,6 +120,66 @@ describe('AppHeader — tab click', () => {
   })
 })
 
+// Import from file button (AC1, AC7)
+describe('AppHeader — Import from file button', () => {
+  it('renders an Import from file button when onImport is provided', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onImport={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Import from file' })).toBeInTheDocument()
+  })
+
+  it('does not render an Import from file button when onImport is omitted', () => {
+    renderHeader()
+    expect(screen.queryByRole('button', { name: 'Import from file' })).not.toBeInTheDocument()
+  })
+
+  it('calls onImport when clicked', () => {
+    const onImport = vi.fn()
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onImport={onImport}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Import from file' }))
+    expect(onImport).toHaveBeenCalledOnce()
+  })
+
+  it('shows importError as role="alert" when set', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onImport={vi.fn()}
+        importError="Import failed: not valid JSON."
+      />,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Import failed: not valid JSON.')
+  })
+
+  it('does not render an alert when importError is null', () => {
+    render(
+      <AppHeader
+        activeView="canvas"
+        onViewChange={vi.fn()}
+        onNewAdventure={vi.fn()}
+        onImport={vi.fn()}
+        importError={null}
+      />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
 // Save button
 describe('AppHeader — Save button', () => {
   it('renders a Save button when onSave is provided', () => {

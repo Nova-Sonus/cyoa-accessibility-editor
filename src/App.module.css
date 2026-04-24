@@ -20,6 +20,10 @@
   overflow: hidden;
 }
 
+.hiddenInput {
+  display: none;
+}
+
 /* display:flex on the same element as [hidden] overrides the UA display:none.
    Scope the flex-container layout to the non-hidden state only. */
 .canvasPanel:not([hidden]) {

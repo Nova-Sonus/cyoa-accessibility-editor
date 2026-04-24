@@ -154,6 +154,12 @@ export function defineContractSuite(
         expect(entry!.title).toBe('The Beginning')
       })
 
+      it('uses displayTitle in metadata when provided instead of first node title', async () => {
+        await repo.save('dt', minimalAdventure, 'Caves Of Bane')
+        const entry = (await repo.listMetadata()).find((m) => m.id === 'dt')
+        expect(entry!.title).toBe('Caves Of Bane')
+      })
+
       it('records a savedAt ISO string on save', async () => {
         const before = new Date().toISOString()
         await repo.save('ts', minimalAdventure)

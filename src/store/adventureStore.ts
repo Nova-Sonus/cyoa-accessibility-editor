@@ -33,6 +33,14 @@ export interface AdventureState {
   selectedNodeId: string | null
 
   /**
+   * Override title used as the metadata display name on the next `saveAdventure`
+   * call. Set by `importAdventure` to the humanised filename so the Open dialog
+   * shows the file name rather than the first node's narrative title. Cleared
+   * when a different adventure is loaded or created.
+   */
+  adventureDisplayTitle: string | null
+
+  /**
    * The id of the node that was selected immediately before the current one.
    * Updated each time `setSelectedNodeId` is called with a non-null id.
    * Supplies "arrived from" context for canvas ARIA announcements.
@@ -123,6 +131,20 @@ export interface AdventureActions {
    * Delegates to the repository so callers never need a direct repo reference.
    */
   listAdventureMetadata(): Promise<AdventureMetadata[]>
+
+  /**
+   * Load an adventure document obtained from an external source (e.g. a file
+   * picked from disk) directly into the store, bypassing the repository.
+   *
+   * Assigns a fresh `adventureId` so a subsequent `saveAdventure()` writes to a
+   * new repository slot. Does not call `repo.save()` — the document remains
+   * unsaved until the author explicitly triggers a save.
+   *
+   * `displayTitle`, when provided, is stored as `adventureDisplayTitle` and
+   * forwarded to the repository on `saveAdventure()` so the Open dialog shows
+   * the filename rather than the first node's narrative title.
+   */
+  importAdventure(doc: Adventure, displayTitle?: string): void
 
   /**
    * Atomically create a stub node and link it as the `nextNode` of the choice
@@ -230,6 +252,7 @@ export function createAdventureStore(repository: AdventureRepository) {
         classifierCache: new Map<NodeId, ClassifierTags>(),
         selectedNodeId: null,
         previousNodeId: null,
+        adventureDisplayTitle: null,
 
         // ---- selection ---------------------------------------------------
 
@@ -254,6 +277,7 @@ export function createAdventureStore(repository: AdventureRepository) {
               adventureId: id,
               document: adventure,
               classifierCache: classifyAll(adventure),
+              adventureDisplayTitle: null,
             },
             false,
             'loadAdventure',
@@ -261,11 +285,11 @@ export function createAdventureStore(repository: AdventureRepository) {
         },
 
         saveAdventure: async () => {
-          const { adventureId, document } = get()
+          const { adventureId, document, adventureDisplayTitle } = get()
           if (adventureId === null) {
             throw new Error('saveAdventure: no adventure is currently loaded')
           }
-          await repository.save(adventureId, document)
+          await repository.save(adventureId, document, adventureDisplayTitle ?? undefined)
         },
 
         createAdventure: async () => {
@@ -287,6 +311,7 @@ export function createAdventureStore(repository: AdventureRepository) {
               document: adventure,
               classifierCache: classifyAll(adventure),
               selectedNodeId: firstNodeId,
+              adventureDisplayTitle: null,
             },
             false,
             'createAdventure',
@@ -302,6 +327,21 @@ export function createAdventureStore(repository: AdventureRepository) {
 
         listAdventureMetadata: async () => {
           return repository.listMetadata()
+        },
+
+        importAdventure: (doc, displayTitle) => {
+          set(
+            {
+              adventureId: crypto.randomUUID(),
+              document: doc,
+              classifierCache: classifyAll(doc),
+              selectedNodeId: null,
+              previousNodeId: null,
+              adventureDisplayTitle: displayTitle ?? null,
+            },
+            false,
+            'importAdventure',
+          )
         },
 
         // ---- node mutations ----------------------------------------------
