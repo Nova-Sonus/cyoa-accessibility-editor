@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import type { AdventureNode } from '../../types/adventure'
 import { useCanvasLayout, edgePath, NODE_WIDTH, NODE_HEIGHT } from './useCanvasLayout'
@@ -321,6 +321,7 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
 
   const isDragging = useRef(false)
   const lastMouse = useRef({ x: 0, y: 0 })
+  const svgRef = useRef<SVGSVGElement>(null)
 
   // ---- Zoom controls ------------------------------------------------------
   const handleZoomIn = useCallback(() => {
@@ -338,11 +339,23 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   }, [])
 
   // ---- Mouse wheel zoom ---------------------------------------------------
-  const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
-    setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2)))))
-  }, [])
+  // React attaches onWheel as a passive listener (React 17+), so e.preventDefault()
+  // inside a synthetic handler is silently ignored and the page still scrolls.
+  // Attaching a non-passive native listener is the only way to call preventDefault().
+  // The dep tracks when adventureDoc becomes non-empty so the effect re-runs once
+  // the SVG actually renders (svgRef.current is null on the initial empty-doc mount).
+  const hasDocs = adventureDoc.length > 0
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+      setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2)))))
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [hasDocs])
 
   // ---- Mouse pan ----------------------------------------------------------
   const handleMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
@@ -413,11 +426,11 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         className={styles.graphRegion}
       >
         <svg
+          ref={svgRef}
           width="100%"
           className={styles.svg}
           style={{ cursor: isDragging.current ? 'grabbing' : 'grab' }}
           aria-hidden="true"
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
