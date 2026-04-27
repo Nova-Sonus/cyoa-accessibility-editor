@@ -1,0 +1,57 @@
+.miniNode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 160px;
+  min-height: 52px;
+  padding: 8px 10px 8px 14px;
+  border: 1.5px solid var(--mini-border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--mini-bg);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.miniNode:hover {
+  opacity: 0.85;
+}
+
+.miniNode:focus-visible {
+  outline: 2px solid var(--mini-border);
+  outline-offset: 2px;
+}
+
+.typeBadge {
+  display: inline-block;
+  background: var(--mini-badge-bg);
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mini-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.checkpointBar {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  background: #d97706;
+  border-radius: 0 2px 2px 0;
+}
