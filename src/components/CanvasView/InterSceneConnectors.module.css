@@ -1,0 +1,93 @@
+.heading {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.emptyMessage {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.edgeButton {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.edgeButton:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: #e2e8f0;
+}
+
+.edgeButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Row: fromScene → toScene [back badge] */
+.sceneLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sceneName {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.arrow {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Back-edge badge — amber to signal loop/reverse jump */
+.backBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Choice text row */
+.choiceLabel {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+  padding-left: 2px;
+}
