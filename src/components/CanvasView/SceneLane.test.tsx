@@ -63,12 +63,14 @@ function renderLane(props: {
   sceneId?: string
   nodes?: AdventureNode[]
   spotlightNodeIds?: ReadonlySet<string> | null
+  focusNodeId?: string | null
   onNodeActivate?: (id: string) => void
 }) {
   const {
     sceneId = 'sceneA',
     nodes = sceneANodes,
     spotlightNodeIds = null,
+    focusNodeId = null,
     onNodeActivate = vi.fn(),
   } = props
   return render(
@@ -78,6 +80,7 @@ function renderLane(props: {
       allNodes={adventure}
       classifierCache={cache}
       spotlightNodeIds={spotlightNodeIds}
+      focusNodeId={focusNodeId}
       onNodeActivate={onNodeActivate}
     />,
   )
@@ -213,6 +216,37 @@ describe('SceneLane — node activation', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Spotlight state pass-through to MiniNode
+// ---------------------------------------------------------------------------
+
+describe('SceneLane — spotlight state pass-through', () => {
+  it('MiniNode has no data-spotlight attribute when spotlight is inactive', () => {
+    renderLane({ spotlightNodeIds: null, focusNodeId: null })
+    const btn = screen.getByRole('button', { name: /Node n1/i })
+    expect(btn.hasAttribute('data-spotlight')).toBe(false)
+  })
+
+  it('focus node gets data-spotlight="focus"', () => {
+    renderLane({ spotlightNodeIds: new Set(['n1', 'n2']), focusNodeId: 'n1' })
+    const focusBtn = screen.getByRole('button', { name: /Node n1/i })
+    expect(focusBtn.getAttribute('data-spotlight')).toBe('focus')
+  })
+
+  it('neighbour node gets data-spotlight="neighbour"', () => {
+    renderLane({ spotlightNodeIds: new Set(['n1', 'n2']), focusNodeId: 'n1' })
+    const neighbourBtn = screen.getByRole('button', { name: /Node n2/i })
+    expect(neighbourBtn.getAttribute('data-spotlight')).toBe('neighbour')
+  })
+
+  it('node outside spotlight set gets data-spotlight="dimmed"', () => {
+    // sceneA has n1, n2, sceneB — spotlight only n1
+    renderLane({ spotlightNodeIds: new Set(['n1']), focusNodeId: 'n1' })
+    const dimmedBtn = screen.getByRole('button', { name: /Node n2/i })
+    expect(dimmedBtn.getAttribute('data-spotlight')).toBe('dimmed')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Accessibility audit
 // ---------------------------------------------------------------------------
 
@@ -231,8 +265,20 @@ describe('SceneLane — axe-core', () => {
     expect(results).toHaveNoViolations()
   })
 
-  it('has no violations with spotlight active', async () => {
-    const { container } = renderLane({ spotlightNodeIds: new Set(['n1']) })
+  it('has no violations with spotlight active (focus + neighbours)', async () => {
+    const { container } = renderLane({
+      spotlightNodeIds: new Set(['n1', 'n2']),
+      focusNodeId: 'n1',
+    })
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+
+  it('has no violations with dimmed nodes', async () => {
+    const { container } = renderLane({
+      spotlightNodeIds: new Set(['n1']),
+      focusNodeId: 'n1',
+    })
     const results = await axe(container)
     expect(results).toHaveNoViolations()
   })

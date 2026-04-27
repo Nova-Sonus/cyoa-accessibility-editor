@@ -4,6 +4,7 @@ import type { ClassifierTags, NodeId } from '../../classifier'
 import { NODE_COLOURS } from '../../styles/tokens'
 import { getSceneFlowIndicators } from './canvasUtils'
 import { MiniNode } from './MiniNode'
+import type { SpotlightState } from './MiniNode'
 import styles from './SceneLane.module.css'
 
 export interface SceneLaneProps {
@@ -15,11 +16,24 @@ export interface SceneLaneProps {
   allNodes: Adventure
   classifierCache: ReadonlyMap<NodeId, ClassifierTags>
   /**
-   * The set of node ids currently in the spotlight neighbourhood.
+   * The set of node ids currently in the spotlight neighbourhood (focus + neighbours).
    * `null` means spotlight mode is inactive.
    */
   spotlightNodeIds: ReadonlySet<string> | null
+  /** The single node that is the focus of the spotlight. `null` when inactive. */
+  focusNodeId: string | null
   onNodeActivate: (nodeId: string) => void
+}
+
+function computeSpotlightState(
+  nodeId: string,
+  focusNodeId: string | null,
+  spotlightNodeIds: ReadonlySet<string> | null,
+): SpotlightState {
+  if (spotlightNodeIds === null) return 'normal'
+  if (nodeId === focusNodeId) return 'focus'
+  if (spotlightNodeIds.has(nodeId)) return 'neighbour'
+  return 'dimmed'
 }
 
 export function SceneLane({
@@ -28,6 +42,7 @@ export function SceneLane({
   allNodes,
   classifierCache,
   spotlightNodeIds,
+  focusNodeId,
   onNodeActivate,
 }: SceneLaneProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -111,6 +126,7 @@ export function SceneLane({
                 key={node.id}
                 node={node}
                 tags={tags}
+                spotlightState={computeSpotlightState(node.id, focusNodeId, spotlightNodeIds)}
                 onActivate={onNodeActivate}
               />
             )

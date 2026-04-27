@@ -3,13 +3,23 @@ import type { ClassifierTags } from '../../classifier'
 import { NODE_COLOURS } from '../../styles/tokens'
 import styles from './MiniNode.module.css'
 
+export type SpotlightState = 'focus' | 'neighbour' | 'dimmed' | 'normal'
+
 export interface MiniNodeProps {
   node: AdventureNode
   tags: ClassifierTags
+  spotlightState?: SpotlightState
   onActivate: (nodeId: string) => void
 }
 
-export function MiniNode({ node, tags, onActivate }: MiniNodeProps) {
+const SPOTLIGHT_CLASS: Record<SpotlightState, string | undefined> = {
+  normal: undefined,
+  focus: styles.spotlightFocus,
+  neighbour: styles.spotlightNeighbour,
+  dimmed: styles.spotlightDimmed,
+}
+
+export function MiniNode({ node, tags, spotlightState = 'normal', onActivate }: MiniNodeProps) {
   const colours = NODE_COLOURS[node.node_type]
   const typeLabel = node.node_type.replace(/_/g, ' ')
 
@@ -20,10 +30,16 @@ export function MiniNode({ node, tags, onActivate }: MiniNodeProps) {
     tags.unreachable ? 'unreachable' : '',
   ].filter(Boolean)
 
+  const spotlightClass = SPOTLIGHT_CLASS[spotlightState]
+  const className = spotlightClass != null
+    ? `${styles.miniNode} ${spotlightClass}`
+    : styles.miniNode
+
   return (
     <button
       type="button"
-      className={styles.miniNode}
+      className={className}
+      data-spotlight={spotlightState !== 'normal' ? spotlightState : undefined}
       style={
         {
           '--mini-border': colours.border,
