@@ -55,6 +55,12 @@ export interface BfsResult {
    * when the node is unreachable.
    */
   sceneId: Map<NodeId, string | null>
+  /**
+   * Id of the node that first reached each node on the shortest path (its
+   * "home parent").  Absent for start nodes and unreachable nodes.  Choices
+   * are visited in order, so siblings are discovered in choice order.
+   */
+  parent: Map<NodeId, NodeId>
 }
 
 /**
@@ -70,6 +76,7 @@ export function bfsFromStarts(
 ): BfsResult {
   const depth = new Map<NodeId, number>()
   const sceneId = new Map<NodeId, string | null>()
+  const parent = new Map<NodeId, NodeId>()
 
   // Queue entries: [nodeId, currentDepth, inheritedSceneId]
   const queue: Array<[NodeId, number, string | null]> = []
@@ -101,11 +108,12 @@ export function bfsFromStarts(
 
       depth.set(nextId, currentDepth + 1)
       sceneId.set(nextId, childScene)
+      parent.set(nextId, currentId)
       queue.push([nextId, currentDepth + 1, childScene])
     }
   }
 
-  return { depth, sceneId }
+  return { depth, sceneId, parent }
 }
 
 // ---------------------------------------------------------------------------

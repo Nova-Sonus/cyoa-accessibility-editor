@@ -242,6 +242,43 @@ describe('bfsFromStarts', () => {
     // sc1 is enqueued before sc2, so junction is first reached via sc1
     expect(sceneId.get('junction')).toBe('sc1')
   })
+
+  it('records the home parent — the node that first reached each node', () => {
+    // s → a, s → x → a: a's home parent is s (shortest path); b's is a
+    const graph: Adventure = [
+      node('s', 'start', [{ nextNode: 'a' }, { nextNode: 'x' }]),
+      node('x', 'decision', [{ nextNode: 'a' }]),
+      node('a', 'decision', [{ nextNode: 'b' }]),
+      node('b'),
+    ]
+    const { parent } = bfsFromStarts(graph, buildNodeMap(graph))
+    expect(parent.get('a')).toBe('s')
+    expect(parent.get('x')).toBe('s')
+    expect(parent.get('b')).toBe('a')
+  })
+
+  it('has no home parent for start nodes or unreachable nodes', () => {
+    const graph: Adventure = [
+      node('s', 'start', [{ nextNode: 'a' }]),
+      node('a'),
+      node('orphan', 'decision', [{ nextNode: 'a' }]),
+    ]
+    const { parent } = bfsFromStarts(graph, buildNodeMap(graph))
+    expect(parent.has('s')).toBe(false)
+    expect(parent.has('orphan')).toBe(false)
+  })
+
+  it('home parent follows choice order when two parents are equally close', () => {
+    // s → p1, s → p2; p1 and p2 both → j.  p1 is dequeued first, so it wins.
+    const graph: Adventure = [
+      node('s', 'start', [{ nextNode: 'p1' }, { nextNode: 'p2' }]),
+      node('p2', 'decision', [{ nextNode: 'j' }]),
+      node('p1', 'decision', [{ nextNode: 'j' }]),
+      node('j'),
+    ]
+    const { parent } = bfsFromStarts(graph, buildNodeMap(graph))
+    expect(parent.get('j')).toBe('p1')
+  })
 })
 
 // ---------------------------------------------------------------------------
