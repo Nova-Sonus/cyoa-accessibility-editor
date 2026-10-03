@@ -27,7 +27,7 @@ export const DEFAULT_SCENE_METRICS: SceneMetrics = {
   padding: 12,
   collapsedWidth: 180,
   collapsedHeight: 64,
-  gapX: 72,
+  gapX: 96,
   gapY: 24,
 }
 

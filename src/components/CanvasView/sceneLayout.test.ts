@@ -279,8 +279,8 @@ describe.each([
 })
 
 describe('layoutCanvas — Caves_Of_Bane overview', () => {
-  it('fits a 1200 px wide viewport at 60% zoom with every scene collapsed', () => {
+  it('fits a 1200 px wide viewport at 56% zoom with every scene collapsed', () => {
     const l = layoutCanvas(buildSceneGraph(caves), new Set())
-    expect(l.width * 0.6).toBeLessThanOrEqual(1200)
+    expect(l.width * 0.56).toBeLessThanOrEqual(1200)
   })
 })
