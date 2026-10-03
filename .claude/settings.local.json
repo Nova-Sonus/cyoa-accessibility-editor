@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Atlassian__getJiraIssue",
+      "mcp__claude_ai_Atlassian__getAccessibleAtlassianResources",
+      "Bash(yarn typecheck:*)",
+      "Bash(yarn test:*)",
+      "mcp__claude_ai_Atlassian__getTransitionsForJiraIssue",
+      "mcp__claude_ai_Atlassian__transitionJiraIssue",
+      "Bash(git stash:*)",
+      "Bash(yarn test:e2e)",
+      "Bash(yarn playwright:*)",
+      "Read(//c/Users/Bridge/**)",
+      "Read(//c/Users/Bridge/.claude/**)",
+      "mcp__claude_ai_Atlassian__getJiraProjectIssueTypesMetadata",
+      "mcp__claude_ai_Atlassian__createJiraIssue",
+      "Bash(curl -s \"https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=Source+Serif+4:ital,wght@0,400;1,400&display=swap\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\")",
+      "Bash(curl -sL \"https://fonts.gstatic.com/s/dmsans/v17/rP2Wp2ywxg089UriCZaSExdy3sGt9zz86GPwyKy58Q.woff2\" -H \"Referer: https://fonts.googleapis.com/\" -H \"Accept: */*\" -o public/fonts/dm-sans-italic-latin.woff2)",
+      "Bash(yarn vitest *)",
+      "Bash(gh run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Read(//d d:/Development/AudioGamer/**)",
+      "Bash(gh pr *)",
+      "mcp__claude_ai_Atlassian__editJiraIssue",
+      "mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(git -C d:/Development/AudioGamer/cyoa-editor diff HEAD)",
+      "Bash(yarn test:e2e --reporter=line)",
+      "Bash(grep -v \"^$\")"
+    ]
+  }
+}

@@ -81,14 +81,78 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - TTS placeholder: a disabled `<button>` labelled "🔊 TTS" with `title="Coming soon"` sits to the right of the Narrative text label — layout uses a flex `narrativeHeader` row above the textarea (not positioned inside it).
 - Header shows a `TypeBadge` plus classifier tag badges: boolean tags (`isOrphan → 'orphan'`, `unreachable`, `isJunction → 'junction'`, `isBranch → 'branch'`, `isLinearLink → 'linear_link'`, `isCheckpoint → 'checkpoint'`) use the existing `ClassifierTag` component; `isTerminal`, `sceneId` (truncated to 8 chars), and finite `depth` render as inline `metaTag` spans with their own CSS custom properties (`--meta-bg`, `--meta-fg`, `--meta-border`).
 
-### Canvas view
-- `CanvasView` lives in `src/components/CanvasView/`. It is a **read-only visual overview** — editing still happens in the outline view.
-- Layout is computed by `computeLayout()` in `useCanvasLayout.ts` (pure function, no React, fully unit-testable). Nodes are positioned using the `depth` field from the classifier cache as the column (x-axis); orphan / unreachable nodes go in a separate far-right column.
-- The SVG is `aria-hidden="true"`. The interactive / screen-reader interface is an accessible `<ul>` of `<button>` elements rendered below it — each button calls `onNodeActivate(nodeId)`.
-- Within the SVG, interactive nodes use the **roving tabIndex** composite-widget pattern: only the selected node has `tabIndex={0}`; arrow keys move selection; Enter/Space activates.
-- Clicking or activating a node calls `onNodeActivate(nodeId)` which is wired in `App.tsx` to switch to outline view and focus that node's title input (`pendingFocusId` → `OutlineView` `focusNodeId` prop).
-- The `<div>` wrapping the SVG must carry `role="region"` for `aria-label` to be ARIA-valid (axe rule `aria-prohibited-attr`).
-- `OutlineView` now accepts optional `focusNodeId` and `onFocusConsumed` props — a `useEffect` converts the incoming id into the internal `focusTargetId` state and immediately calls `onFocusConsumed` so the parent can clear the prop for future activations.
+### Canvas view (OPS-576 — swimlane + spotlight model)
+- `CanvasView` lives in `src/components/CanvasView/`. Renders a scene-swimlane layout (replaced the old SVG graph in OPS-576).
+- **Layout**: flex column — `SpotlightBreadcrumb` (when active) + `div.layout` (flex row: `swimlaneArea` left, `sidebar` right 280 px).
+- **Swimlane area**: `<div role="region" aria-label="Scene swimlanes">` — vertical stack of: `<section aria-label="Unscoped nodes">` (preamble, nodes where `sceneId=null`) + `SceneLane` × N (one per entry in `groupByScene` output).
+- **Sidebar**: `NodeDetail` (flex 1, shows spotlighted node details) above `InterSceneConnectors` (max-height 240 px, scrollable).
+- **Spotlight interaction**: `useSpotlight(allNodes)` provides `focusNodeId`, `spotlightNodeIds`, `breadcrumb`, `activate`, `clear`, `navigateTo`. Internal `handleNodeActivate(nodeId)` calls `spotlight.activate(nodeId)` + `store.setSelectedNodeId(nodeId)` (updates CompanionPanel). This is called by MiniNode, NodeDetail choices, and InterSceneConnectors buttons.
+- **`onNodeActivate` prop**: used ONLY for the NodeDetail "Edit in outline" footer button → switches to outline view. In App.tsx, `handleCanvasNodeActivate` calls `setSelectedNodeId` + `setPendingFocusId` + `setActiveView('outline')`.
+- **`NodeDetail.onEdit?`**: optional prop; when provided, renders a footer button "Edit in outline". In CanvasView, `onEdit={onNodeActivate}` (the prop from App.tsx).
+- `computeLayout()` in `useCanvasLayout.ts` and the old SVG/pan/zoom code are retained (dead code) — still tested by `CanvasView.test.tsx` pure function tests.
+- `OutlineView` accepts optional `focusNodeId` and `onFocusConsumed` props — a `useEffect` converts the incoming id into internal `focusTargetId` and calls `onFocusConsumed` to clear the prop.
+
+### Canvas utilities (OPS-570)
+- `canvasUtils.ts` contains four pure functions (no React, no store imports), fully unit-tested against both fixtures:
+  - `getNeighbours(nodes, nodeId)` → `{ parents, children, all }` — one-hop neighbourhood sets.
+  - `getInterSceneEdges(nodes, cache)` → `InterSceneEdge[]` — edges crossing scene boundaries; each entry has `from`, `to`, `label`, `fromScene`, `toScene`, `isBack` (`isBack = true` when target scene depth ≤ source scene depth).
+  - `groupByScene(nodes, cache)` → `Map<sceneId, AdventureNode[]>` — partitions nodes by classifier `sceneId`; nodes with `sceneId=null` (preamble, orphans) are excluded.
+  - `getSceneFlowIndicators(nodes, cache, sceneId)` → `{ inbound: Set<string>, outbound: Set<string> }` — which other named scenes flow into / out of a given scene.
+
+### SceneLane (OPS-571)
+- `SceneLane` (`src/components/CanvasView/SceneLane.tsx`) — collapsible `<section aria-label="Scene: …">` containing all nodes for one scene.
+- **Header**: `<button aria-expanded>` with chevron (aria-hidden), scene title (from `allNodes.find(n => n.id === sceneId)?.title`), scene-id badge, node count, checkpoint count (hidden when 0), inbound `←` and outbound `→` flow-indicator chips (scene titles resolved from `allNodes`).
+- **Body**: `flex-wrap` row of `MiniNode` cards with `gap: 10px`. Unmounted when collapsed (not hidden).
+- **Spotlight ring**: `data-spotlighted` attribute is present (empty string) when `spotlightNodeIds !== null` and any lane node is in that set. CSS rule `.lane[data-spotlighted]` applies a `box-shadow` ring using `var(--lane-border)`.
+- **Colour**: `--lane-border` is always `NODE_COLOURS['scene_start'].border` (`#7c3aed`).
+- Collapse state is **local `useState`** — not in the store.
+- Props: `sceneId`, `nodes`, `allNodes`, `classifierCache`, `spotlightNodeIds: ReadonlySet<string> | null`, `onNodeActivate`.
+
+### MiniNode (OPS-572)
+- `MiniNode` (`src/components/CanvasView/MiniNode.tsx`) — compact `<button>` (160 px wide) for one node inside a `SceneLane`.
+- `aria-label` carries the full accessible description (title + type + checkpoint/orphan/unreachable qualifiers); inner `<span>` elements are `aria-hidden`.
+- Checkpoint amber bar: absolute-positioned `<span class={styles.checkpointBar}>` on the left edge.
+- Styled via CSS custom properties `--mini-border`, `--mini-bg`, `--mini-badge-bg`, `--mini-text` set from `NODE_COLOURS[node.node_type]`.
+- **Spotlight states** (`spotlightState?: SpotlightState`, default `'normal'`): `'focus'` — `scale(1.06)` + `box-shadow` ring using `--mini-border`; `'neighbour'` — full opacity; `'dimmed'` — `opacity: 0.35` + `scale(0.97)`; `'normal'` — no modifier. The `data-spotlight` attribute is set to the state value (omitted when `'normal'`) for CSS hooks and testing.
+- `SpotlightState` is exported from `MiniNode.tsx` for reuse in `SceneLane` and future assembly (OPS-576).
+- `SceneLane` accepts `focusNodeId: string | null` alongside `spotlightNodeIds`. The module-private `computeSpotlightState(nodeId, focusNodeId, spotlightNodeIds)` derives the correct state per node and passes it as `spotlightState` to each `MiniNode`.
+
+### Spotlight interaction (OPS-573)
+- **`useSpotlight(allNodes)`** hook (`src/components/CanvasView/useSpotlight.ts`) — manages all spotlight state; returns `SpotlightHandle`:
+  - `focusNodeId: string | null` — last entry in breadcrumb, or `null` when inactive.
+  - `spotlightNodeIds: ReadonlySet<string> | null` — focus node + its one-hop neighbours (via `getNeighbours`); `null` when inactive.
+  - `breadcrumb: readonly string[]` — ordered history of focused node IDs (current focus is last).
+  - `activate(nodeId)` — appends to breadcrumb, or truncates back to an existing entry if already present; no-op if `nodeId` is already the current focus.
+  - `clear()` — deactivates spotlight and empties breadcrumb.
+  - `navigateTo(index)` — truncates breadcrumb to `index`; no-op if already at or past that point.
+- **`SpotlightBreadcrumb`** (`src/components/CanvasView/SpotlightBreadcrumb.tsx`) — presentational component; returns `null` when `breadcrumb` is empty.
+  - Renders `<nav aria-label="Spotlight trail">` with an `<ol>` of breadcrumb entries and a "Clear spotlight" dismiss button.
+  - Prior entries are `<button>` elements (clicking calls `onNavigate(index)`); the current (last) entry is a `<span aria-current="true">` — not interactive, since you're already there.
+  - Node IDs are resolved to titles via `allNodes`; falls back to the raw ID if not found.
+  - Styled via `SpotlightBreadcrumb.module.css`.
+- OPS-576 will wire `useSpotlight` into `CanvasView`: `activate` is called from `SceneLane`'s `onNodeActivate`; `focusNodeId`, `spotlightNodeIds`, and `breadcrumb` drive `SceneLane` props and the breadcrumb strip above the swimlanes.
+
+### InterSceneConnectors (OPS-574)
+- `InterSceneConnectors` (`src/components/CanvasView/InterSceneConnectors.tsx`) — sidebar panel listing every edge that crosses a scene boundary.
+- Props: `edges: InterSceneEdge[]` (from `getInterSceneEdges`), `allNodes: Adventure` (title resolution), `onActivate: (nodeId: string) => void`.
+- Always rendered; shows "No inter-scene connections." when `edges` is empty.
+- Each edge renders as a `<button>` with two rows: scene line (`fromScene title → toScene title` + amber **↩ back** badge when `isBack`) and an italic choice-label row (`via "…"`, omitted when label is empty string).
+- Clicking calls `onActivate(edge.from)` — navigates to the source node that carries the cross-scene choice.
+- Scene and node titles are resolved from `allNodes`; falls back to the raw id when not found.
+- Landmark: `<section aria-label="Scene connections">`.
+- Styled via `InterSceneConnectors.module.css`; back badge uses amber palette (`#fef3c7 / #92400e / #fde68a`) to visually distinguish loop/reverse jumps.
+
+### NodeDetail (OPS-575)
+- `NodeDetail` (`src/components/CanvasView/NodeDetail.tsx`) — read-only sidebar panel for the currently spotlighted node.
+- Props: `node: Adventure[number] | null`, `tags: ClassifierTags | null`, `allNodes: Adventure`, `onActivate: (nodeId: string) => void`.
+- **Placeholder** (`node === null`): `<aside aria-label="Node detail">` with italic "Spotlight a node to see its details." — no headings or buttons.
+- **Active** (node present):
+  - **Header**: `<h2>` title, `TypeBadge`, classifier tag row — boolean tags via `ClassifierTag`; `isTerminal`, `sceneId` (truncated to 8 chars), finite `depth` as inline `metaTag` spans with CSS custom properties (mirrors CompanionPanel). `tags === null` omits the tag row entirely.
+  - **Narrative section** (`<section aria-labelledby>`): shows `node.narrativeText` in a `<p>`; "No narrative text." when empty.
+  - **Choices section** (`<section aria-labelledby>`): heading includes count; each choice is a `<button>` showing `choiceText → resolvedTargetTitle`; falls back to `(untitled choice)` when `choiceText` is empty and to raw node id when the target is not in `allNodes`; clicking calls `onActivate(choice.nextNode)`. "No choices." when `choices` is empty.
+  - **Footer**: monospace node id.
+- Styled via `NodeDetail.module.css`; header background/border driven by `NODE_COLOURS` CSS custom properties `--node-bg` / `--node-border`.
+- Heading hierarchy: `<h2>` for node title, `<h3>` for section headings — IDs scoped to `nd-{section}-{node.id}` to support `aria-labelledby`.
 
 ### Composition root
 - `App.tsx` is the only place `LocalFileRepository` (or any concrete repo) is constructed.
@@ -123,7 +187,7 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 - **Coverage thresholds**: 90% lines/functions/branches/statements on all files under `src/` (excluding `src/types/`, `src/schema/`, `src/main.tsx`, `src/App.tsx`, `src/test/`).
 - **Contract pattern**: shared suites live in `contract.ts` (not `contract.test.ts`) and export a `defineContractSuite(name, factory)` function. Future repository implementations call this with their own factory.
 - **Zero axe-core violations** is a merge gate. Use `jest-axe` in component tests and `@axe-core/playwright` in e2e.
-- Fixture files live in `fixtures/` at the repo root. Two fixtures are in use: `Caves_Of_Bane.json` (has a known `choiceResponseConstaint` typo — see OPS-517 data-quality note; do not validate it with Ajv in tests) and `a_strange_day_at_the_zoo.json` (schema-valid).
+- Fixture files live in `fixtures/` at the repo root. Two fixtures are in use: `Caves_Of_Bane.json` and `a_strange_day_at_the_zoo.json`. Both are schema-valid.
 
 ### Vitest + React component test infrastructure
 
@@ -183,5 +247,13 @@ yarn generate-types  # regenerate src/types/adventure.generated.ts from schema
 | 23 | OPS-554 | Companion panel — core fields | Done |
 | 24 | OPS-537 | TTS preview of narrativeText via Web Speech API | — |
 | 25 | OPS-536 | Accessibility audit and JAWS validation | — |
+| 26 | OPS-569 | Canvas mode: scene swimlanes with spotlight interaction | In Progress |
+| – | OPS-570 | ↳ Canvas utilities: neighbourhood, inter-scene edges, scene grouping | Done |
+| – | OPS-571 | ↳ SceneLane component with collapsible header and flow indicators | Done |
+| – | OPS-572 | ↳ MiniNode canvas card with spotlight state variants | Done |
+| – | OPS-573 | ↳ Spotlight mode interaction and breadcrumb trail | Done |
+| – | OPS-574 | ↳ InterSceneConnectors sidebar panel with back-edge indicators | Done |
+| – | OPS-575 | ↳ NodeDetail sidebar panel for spotlighted node | Done |
+| – | OPS-576 | ↳ CanvasView assembly, store wiring, and accessibility pass | Done |
 
-Implementation order: 538 → 539 → 540 → 541 → 542 → 543/544/545/546 → 547/548 → 554 → 544 → 537 → 536. OPS-545 done 2026-04-19: styled Choices section + created ChoiceRow.module.css. OPS-546 done 2026-04-19: created IssuesPanel.module.css. OPS-548 done 2026-04-19: nextNode select shows node titles not IDs. OPS-554 done 2026-04-20: `CompanionPanel` core fields; `selectedNodeId` + `setSelectedNodeId` + `previousNodeId` added to store. OPS-544 done 2026-04-20: CompanionPanel full rebuild (4 FieldGroup sections, NodeComboField, AudioComboField, ActivitiesList, delete-with-confirm footer); canvas default view; Save moved to AppHeader with `role="alert"` error; canvas tabpanel = CompanionPanel (320 px) + CanvasView flex row.
+Implementation order: 538 → 539 → 540 → 541 → 542 → 543/544/545/546 → 547/548 → 554 → 544 → 537 → 536. OPS-545 done 2026-04-19: styled Choices section + created ChoiceRow.module.css. OPS-546 done 2026-04-19: created IssuesPanel.module.css. OPS-548 done 2026-04-19: nextNode select shows node titles not IDs. OPS-554 done 2026-04-20: `CompanionPanel` core fields; `selectedNodeId` + `setSelectedNodeId` + `previousNodeId` added to store. OPS-544 done 2026-04-20: CompanionPanel full rebuild (4 FieldGroup sections, NodeComboField, AudioComboField, ActivitiesList, delete-with-confirm footer); canvas default view; Save moved to AppHeader with `role="alert"` error; canvas tabpanel = CompanionPanel (320 px) + CanvasView flex row. OPS-566 done 2026-04-24: Import from file — `importAdventure` store action (bypasses repo, assigns fresh UUID); Import button in AppHeader; hidden file input in App.tsx; validation via `validateAdventure`/`getValidationErrors`; `importError` shown as `role="alert"`; `Caves_Of_Bane.json` typo fixed. OPS-570 done 2026-04-27: `canvasUtils.ts` — four pure canvas utility functions (`getNeighbours`, `getInterSceneEdges`, `groupByScene`, `getSceneFlowIndicators`) with full unit test coverage against both fixtures. OPS-571 done 2026-04-27: `SceneLane` (collapsible section with header badges + flow indicators + spotlight ring) and `MiniNode` (compact node button, placeholder for OPS-572) in `src/components/CanvasView/`; 21 tests, zero axe-core violations. OPS-572 done 2026-04-27: `MiniNode` spotlight state variants (`focus`/`neighbour`/`dimmed`/`normal`) — CSS opacity/transform per state, `data-spotlight` attribute, `SpotlightState` type exported; `SceneLane` gains `focusNodeId` prop and `computeSpotlightState()` helper; `MiniNode.test.tsx` added (18 tests); `SceneLane.test.tsx` extended with state pass-through + axe tests; 594 tests total, zero violations. OPS-573 done 2026-04-27: `useSpotlight(allNodes)` hook — breadcrumb state, `focusNodeId`, `spotlightNodeIds` (focus + one-hop neighbours), `activate`/`clear`/`navigateTo`; `SpotlightBreadcrumb` component — `<nav aria-label="Spotlight trail">` with prior entries as buttons and current entry as `<span aria-current="true">`, dismiss button; `useSpotlight.test.ts` (24 tests) + `SpotlightBreadcrumb.test.tsx` (15 tests + 2 axe); 630 tests total, zero violations. OPS-574 done 2026-04-27: `InterSceneConnectors` component — `<section aria-label="Scene connections">` listing cross-scene edges as buttons (fromScene → toScene, amber ↩ back badge, italic via label); empty state "No inter-scene connections."; `onActivate(edge.from)`; `InterSceneConnectors.test.tsx` (24 tests + 4 axe); 654 tests total, zero violations. OPS-575 done 2026-04-27: `NodeDetail` component — read-only `<aside aria-label="Node detail">` with placeholder when null; header (h2 title + TypeBadge + classifier tags); Narrative section (narrativeText or "No narrative text."); Choices section (one button per choice → onActivate(nextNode), "(untitled choice)" fallback, title resolution, "No choices." empty state); footer with node id; `NodeDetail.test.tsx` (33 tests + 5 axe); 687 tests total, zero violations. OPS-576 done 2026-04-27: `CanvasView` fully rewritten — SVG canvas replaced with swimlane + sidebar layout; `div.swimlaneArea` (`role="region"`, overflow-y auto) contains preamble `<section>` (nodes with sceneId=null) and `SceneLane` × N from `groupByScene`; sidebar (280 px) contains `NodeDetail` (flex 1) + `InterSceneConnectors` (max-height 240 px); `useSpotlight` drives spotlight state — clicking any MiniNode/InterSceneConnectors/NodeDetail choice calls internal `handleNodeActivate` (activates spotlight + `setSelectedNodeId`); NodeDetail gains optional `onEdit?` prop rendered as "Edit in outline" footer button wired to `onNodeActivate` prop → App.tsx `handleCanvasNodeActivate` now switches to outline view + sets `pendingFocusId`; `CanvasView.test.tsx` updated (pure `computeLayout`/`edgePath` tests kept, component tests rewritten: swimlane layout, NodeDetail sidebar, spotlight state, 3 axe audits); 698 tests total, zero violations.

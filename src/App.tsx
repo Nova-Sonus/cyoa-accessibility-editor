@@ -93,10 +93,11 @@ export default function App() {
     }
   }, [])
 
-  // Canvas node activate: select in store (updates CompanionPanel).
-  // pendingFocusId is retained for outline-mode focus via focusNodeId prop.
+  // Canvas "Edit in outline": switch to outline view and focus the node.
   const handleCanvasNodeActivate = useCallback((nodeId: string) => {
     storeRef.current.getState().setSelectedNodeId(nodeId)
+    setPendingFocusId(nodeId)
+    setActiveView('outline')
   }, [])
 
   const handleFocusConsumed = useCallback(() => {

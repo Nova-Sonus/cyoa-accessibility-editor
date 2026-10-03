@@ -1,0 +1,48 @@
+Findings
+
+Medium The “create and link a new node” use case is implemented in two places with different rules, which breaks SRP/OCP and risks divergent behavior. The store exposes createNodeAndLinkChoice as a domain action with one default node shape in adventureStore.ts (line 109) and implementation in adventureStore.ts (line 396), but CompanionPanel bypasses it and re-implements the workflow in the UI with a different default node type in CompanionPanel.tsx (line 325). Today that means one path creates a narrative node and the other creates a decision node. Any future rule change now requires editing multiple modules and keeping them in sync manually.
+
+Medium The composition root is doing more than wiring dependencies; App directly orchestrates persistence workflows against a concrete LocalFileRepository, which weakens DIP and centralizes application logic in the top-level component. The concrete dependency is created in App.tsx (line 33), then App directly drives list, save, and listMetadata in App.tsx (line 43), App.tsx (line 58), and App.tsx (line 67). That undercuts the repository-layer guidance in index.ts (line 1) and the repository comments in LocalFileRepository.ts (line 60). Swapping storage backends is still possible, but the app shell now owns use-case flow instead of a narrower application service or store action.
+
+Low-Medium CompanionPanel and CanvasView each accumulate several independent reasons to change, so SRP is only partially met at the component level. CompanionPanel mixes store selection, node editing, asset suggestion derivation, choice orchestration, audio combobox behavior, and activity list UI in one file spanning CompanionPanel.tsx (line 63) through CompanionPanel.tsx (line 737). CanvasView similarly mixes graph rendering, zoom/pan state, keyboard navigation, ARIA announcements, and alternate accessible list rendering in CanvasView.tsx (line 56) through CanvasView.tsx (line 632). These files are still readable, but extension pressure will tend to produce edits to the same modules rather than extension via smaller collaborators.
+
+Assessment
+
+This repo meets SOLID moderately well, not exceptionally. The strongest areas are:
+
+Dependency inversion around persistence exists in the store and repository contract, especially AdventureRepository.ts (line 1).
+LSP is in decent shape because both repository implementations appear to honor the same contract and are backed by contract tests in contract.ts (line 1).
+Some logic is cleanly separated into pure functions, like validation and issue derivation in validator.ts (line 1) and deriveIssues.ts (line 1).
+The weaker areas are mostly SRP and a bit of DIP/OCP in the UI layer. The architecture clearly aims for SOLID, but a few important use cases still leak into top-level or large UI components.
+
+SOLID Scorecard
+
+S Single Responsibility: 6/10
+The repo has some very good separations at the utility and repository level, but a few core UI modules still carry too many responsibilities. CompanionPanel.tsx (line 281) mixes store access, editing workflows, derived data, and multiple sub-widgets. CanvasView.tsx (line 307) mixes rendering, input handling, and accessibility orchestration. The store is also doing both state management and some domain orchestration in adventureStore.ts (line 205).
+
+O Open/Closed: 6/10
+The repository contract is a solid extension point, and the contract tests help a lot. But some behaviors are still duplicated instead of extended from a single abstraction. The clearest example is the “create and link node” workflow split between adventureStore.ts (line 396) and CompanionPanel.tsx (line 325). That means changing the rule is not “open for extension, closed for modification”; it requires edits in multiple places.
+
+L Liskov Substitution: 8/10
+This is one of the stronger areas. InMemoryRepository and LocalFileRepository both implement the same contract and are validated by the shared suite in contract.ts (line 1). That gives good confidence that callers can substitute implementations safely. The only small caveat is that LocalFileRepository adds validation behavior on save, so consumers should treat save failures as part of the contract in practice.
+
+I Interface Segregation: 7/10
+The repository interface is reasonably small and focused in AdventureRepository.ts (line 1). The store API is usable, but it’s a broad “god interface” for consumers in adventureStore.ts (line 43). Components still pull many individual actions and state slices directly instead of depending on narrower facades or hooks tailored to their use cases.
+
+D Dependency Inversion: 7/10
+The store depends on the AdventureRepository abstraction rather than a concrete implementation in adventureStore.ts (line 205), which is good. The weaker point is the app shell still constructs and directly uses LocalFileRepository in App.tsx (line 33), App.tsx (line 43), and App.tsx (line 67). So DIP is present in the data layer, but not carried consistently through the app-level orchestration.
+
+Overall
+
+Overall I’d rate the repo around 6.8/10 on SOLID. The codebase shows strong intent and several good foundations, especially around repositories, pure derivation helpers, and testability. The main drag is that a few important use cases are still implemented in large UI files or duplicated across layers.
+
+Top 3 Refactors
+
+Move all node-creation workflows behind store/domain actions.
+Have CompanionPanel call createNodeAndLinkChoice instead of creating nodes itself, and centralize default node-shape rules in one place. That gives the biggest immediate win for S and O.
+
+Introduce a thin application service or store actions for app-level workflows.
+Flows like “new adventure”, “autoload last adventure”, “open metadata list”, and “save current adventure” should live behind a narrower app-facing abstraction instead of being orchestrated directly in App.tsx (line 32). That improves D and keeps the composition root focused on wiring.
+
+Split CompanionPanel and CanvasView by responsibility.
+Extract behavior-heavy pieces into dedicated hooks/components, such as useNodeEditor, useCanvasNavigation, NodeLinkField, and AudioSuggestionsField. That raises S, makes testing easier, and reduces the chance that unrelated changes collide in the same file.

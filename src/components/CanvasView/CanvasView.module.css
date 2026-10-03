@@ -1,6 +1,5 @@
 /* Root: fills the flex slot in canvasPanel (CompanionPanel + CanvasView row) */
 .canvasView {
-  position: relative; /* containing block for .srOnly */
   flex: 1;
   min-width: 0;
   display: flex;
@@ -8,44 +7,71 @@
   overflow: hidden;
 }
 
-/* Zoom / pan toolbar */
-.toolbar {
-  flex-shrink: 0;
-  display: flex;
-  gap: 8px;
-  padding: 4px 0 8px;
-  align-items: center;
-}
-
-/* Legend row — wraps CanvasLegend to prevent flex shrink */
-.legendWrapper {
-  flex-shrink: 0;
-}
-
-/* SVG canvas region: grows to fill remaining vertical space */
-.graphRegion {
+/* Horizontal split: swimlane area (left) + sidebar (right) */
+.layout {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
   overflow: hidden;
+}
+
+/* Scrollable swimlane column */
+.swimlaneArea {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Preamble section (nodes with no sceneId) */
+.preamble {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-}
-
-/* SVG fills the region exactly */
-.svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* Accessible node list — screen-reader-only alternative to the visual graph */
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+}
+
+.preambleHeading {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.preambleBody {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+}
+
+/* Sidebar: NodeDetail (flex 1) + InterSceneConnectors (fixed bottom) */
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.nodeDetailWrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.connectorsWrapper {
+  flex-shrink: 0;
+  border-top: 1px solid #e2e8f0;
+  max-height: 240px;
+  overflow-y: auto;
 }
