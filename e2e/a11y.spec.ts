@@ -300,30 +300,38 @@ test.describe('Landmark and heading structure', () => {
     ).toBeVisible()
   })
 
-  test('canvas view: heading order is h1 then h2 (no gaps)', async ({
+  test('canvas view: no heading levels are skipped (OPS-582 flow canvas)', async ({
     page,
   }) => {
-    await seedAdventure(page, 'single', ADV_SINGLE)
+    await seedAdventure(page, 'multi', ADV_MULTI)
     await page.getByRole('tab', { name: 'Canvas' }).click()
     await expect(
       page.getByRole('region', { name: /Adventure graph/i }),
     ).toBeVisible()
+    // Spotlight a node so NodeDetail's h2/h3 headings are present too.
+    await page.getByRole('button', { name: /Start Node \(start\)/ }).click()
 
-    // The accessible node list must use h2, not h3, so no heading levels
-    // are skipped under the app's h1.
-    const h2s = page.getByRole('heading', { level: 2 })
-    await expect(h2s).toHaveCount(1)
-    await expect(h2s.first()).toContainText('Nodes')
-
-    const h3s = page.getByRole('heading', { level: 3 })
-    await expect(h3s).toHaveCount(0)
+    const levels = await page.evaluate(() =>
+      [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+        .filter((h) => (h as HTMLElement).offsetParent !== null)
+        .map((h) => Number(h.tagName.slice(1))),
+    )
+    expect(levels[0]).toBe(1)
+    for (let i = 1; i < levels.length; i++) {
+      expect(levels[i]!, `heading ${i + 1} skips a level`).toBeLessThanOrEqual(levels[i - 1]! + 1)
+    }
+    // Each scene box is headed by an h2 holding its collapse toggle.
+    await expect(
+      page.getByRole('heading', { level: 2, name: /Opening/ }),
+    ).toBeVisible()
   })
 
-  test('canvas view: node list is a named landmark', async ({ page }) => {
-    await seedAdventure(page, 'single', ADV_SINGLE)
+  test('canvas view: each scene is a named region', async ({ page }) => {
+    await seedAdventure(page, 'multi', ADV_MULTI)
     await page.getByRole('tab', { name: 'Canvas' }).click()
+    await expect(page.getByRole('region', { name: 'Scene: Opening' })).toBeVisible()
     await expect(
-      page.getByRole('region', { name: /Node list/i }),
+      page.getByRole('region', { name: 'Scene: Unlinked nodes' }),
     ).toBeVisible()
   })
 
@@ -504,23 +512,23 @@ test.describe('Keyboard navigation — canvas view', () => {
     ).toBeVisible()
   })
 
-  test('accessible node list buttons are reachable by Tab', async ({
+  /** True when focus is on a node card (not a scene toggle) in the graph. */
+  async function focusIsOnNodeCard(page: Page): Promise<boolean> {
+    return page.evaluate(() => {
+      const el = document.activeElement as HTMLElement
+      return el.tagName === 'BUTTON'
+        && el.closest('[aria-label^="Adventure graph"]') !== null
+        && !el.hasAttribute('aria-expanded')
+    })
+  }
+
+  test('node cards in the graph are reachable by Tab', async ({
     page,
   }) => {
-    // Tab into the node list section's buttons
     let found = false
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 30; i++) {
       await page.keyboard.press('Tab')
-      const tag = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement
-        const section = el.closest('section[aria-label]')
-        return {
-          tag: el.tagName,
-          inNodeList:
-            section?.getAttribute('aria-label')?.includes('Node list') ?? false,
-        }
-      })
-      if (tag.tag === 'BUTTON' && tag.inNodeList) {
+      if (await focusIsOnNodeCard(page)) {
         found = true
         break
       }
@@ -528,24 +536,13 @@ test.describe('Keyboard navigation — canvas view', () => {
     expect(found).toBe(true)
   })
 
-  test('activating a node via the accessible list selects it in the companion panel', async ({
+  test('activating a node card by keyboard selects it in the companion panel', async ({
     page,
   }) => {
-    // Tab to the first button in the accessible node list and press Enter.
-    // Force-click is not viable since the list is in a visually-hidden srOnly region;
-    // keyboard activation (how screen readers work) is the correct interaction model.
     let activated = false
     for (let i = 0; i < 30; i++) {
       await page.keyboard.press('Tab')
-      const info = await page.evaluate(() => {
-        const el = document.activeElement as HTMLElement
-        const section = el.closest('section[aria-label]')
-        return {
-          tag: el.tagName,
-          inNodeList: section?.getAttribute('aria-label')?.includes('Node list') ?? false,
-        }
-      })
-      if (info.tag === 'BUTTON' && info.inNodeList) {
+      if (await focusIsOnNodeCard(page)) {
         await page.keyboard.press('Enter')
         activated = true
         break
@@ -632,7 +629,7 @@ test.describe('Focus management', () => {
     expect(focused.type).toBe('text')
   })
 
-  test('canvas keyboard navigation activates a node in the companion panel', async ({
+  test('canvas keyboard activation selects a node in the companion panel', async ({
     page,
   }) => {
     await seedAdventure(page, 'multi', ADV_MULTI)
@@ -640,9 +637,9 @@ test.describe('Focus management', () => {
     const graphRegion = page.getByRole('region', { name: /Adventure graph/i })
     await expect(graphRegion).toBeVisible()
 
-    // Focus the canvas graph region (roving-tabIndex composite widget, selectedIndex starts at 0)
-    // and press Enter to activate the first node (Start Node in ADV_MULTI)
-    await graphRegion.focus()
+    // Focus the Start Node card and press Enter.  (Arrow-key movement
+    // between cards arrives with the OPS-584 keyboard model.)
+    await graphRegion.getByRole('button', { name: /Start Node \(start\)/ }).focus()
     await page.keyboard.press('Enter')
 
     // setSelectedNodeId is called — CompanionPanel shows the node's title

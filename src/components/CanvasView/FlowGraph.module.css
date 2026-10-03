@@ -1,0 +1,168 @@
+/* The transformed content layer: every position below is in canvas pixels. */
+.world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--world-w);
+  height: var(--world-h);
+  transform-origin: 0 0;
+  transform: translate(var(--pan-x), var(--pan-y)) scale(var(--zoom));
+}
+
+/* ---- Scene boxes ------------------------------------------------------- */
+
+.scene {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  box-sizing: border-box;
+  border: 1.5px solid var(--scene-border);
+  border-radius: 8px;
+  background: var(--scene-bg);
+}
+
+.scene[data-kind='unreachable'] {
+  border-style: dashed;
+}
+
+.sceneHeading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.sceneToggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: var(--header-h);
+  min-height: 24px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--scene-text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scene[data-expanded] .sceneToggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  border-bottom: 1px solid var(--scene-border);
+  border-radius: 7px 7px 0 0;
+}
+
+.sceneToggle:hover {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.sceneToggle:focus-visible {
+  outline: 2px solid var(--scene-border);
+  outline-offset: 2px;
+}
+
+.sceneTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.sceneTitle {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sceneSummary {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ---- Node cards -------------------------------------------------------- */
+
+/* Positions a MiniNode at its computed slot and forces it to the exact slot
+   size the layout assumed (the card's own CSS uses content-box sizing). */
+.nodeSlot {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+}
+
+.nodeSlot > button {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- Links ------------------------------------------------------------- */
+
+/* Drawn above the scene backgrounds; links never cross a node card, and the
+   layer ignores the pointer so cards and toggles stay clickable. */
+.links {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.link {
+  fill: none;
+  stroke-width: 1.5;
+  transition: opacity 0.2s ease;
+}
+
+.link_tree { stroke: #334155; }
+.link_cross { stroke: #2563eb; }
+.link_scene { stroke: #7c3aed; }
+
+/* Loop-backs: amber and dashed, so colour is not the only cue. */
+.link_back {
+  stroke: #b45309;
+  stroke-dasharray: 5 3;
+}
+
+.arrow_tree { fill: #334155; }
+.arrow_cross { fill: #2563eb; }
+.arrow_scene { fill: #7c3aed; }
+.arrow_back { fill: #b45309; }
+
+.linkFocus {
+  stroke-width: 2.5;
+}
+
+.linkDimmed {
+  opacity: 0.15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition: none;
+  }
+}

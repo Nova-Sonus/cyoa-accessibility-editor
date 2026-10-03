@@ -1,13 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import { axe } from 'jest-axe'
-import { CanvasView } from './CanvasView'
+import { CanvasView, initialExpanded } from './CanvasView'
 import { AdventureStoreProvider } from '../../store/StoreContext'
 import { createAdventureStore } from '../../store/adventureStore'
 import { InMemoryRepository } from '../../repository/InMemoryRepository'
 import type { AdventureNode } from '../../types/adventure'
-import { computeLayout, edgePath } from './useCanvasLayout'
-import { classifyAll } from '../../classifier'
+import { buildSceneGraph, PREAMBLE_KEY, sceneKey } from './sceneGraph'
+
+// jsdom has no PointerEvent, so fireEvent.pointer* would build plain Events
+// without `button` / `clientX`.  A MouseEvent subclass carries both.
+if (typeof window.PointerEvent === 'undefined') {
+  class PointerEventStandIn extends MouseEvent {}
+  window.PointerEvent = PointerEventStandIn as unknown as typeof window.PointerEvent
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,9 +52,7 @@ function renderCanvas(store: Store, onNodeActivate = vi.fn()) {
   )
 }
 
-// Simple 3-node adventure: start → scene_start → narrative
-// preamble (sceneId=null): [start1, scene1]
-// sceneMap: { 'scene1': [node1] }
+// start1 (opening) → scene1 (scene_start) → node1
 function makeSimpleDoc() {
   return [
     makeNode('start1', { node_type: 'start', choices: [makeChoice('scene1', 'Enter')] }),
@@ -57,241 +61,330 @@ function makeSimpleDoc() {
   ]
 }
 
+async function setup(doc = makeSimpleDoc()) {
+  const store = await makeStoreWithNodes(doc)
+  const onNodeActivate = vi.fn()
+  const result = renderCanvas(store, onNodeActivate)
+  return { ...result, store, onNodeActivate }
+}
+
+const graphRegion = () => screen.getByRole('region', { name: /Adventure graph/i })
+const sceneToggle = (name: RegExp) =>
+  within(screen.getByRole('region', { name })).getAllByRole('button')[0]!
+const linkPaths = (container: HTMLElement) =>
+  [...container.querySelectorAll('path[data-link-style]')]
+const zoomLevel = () =>
+  within(screen.getByRole('toolbar', { name: 'Canvas controls' })).getByText(/%$/)
+
 // ---------------------------------------------------------------------------
-// computeLayout — pure unit tests
+// initialExpanded
 // ---------------------------------------------------------------------------
 
-describe('computeLayout', () => {
-  it('returns empty layout for empty document', () => {
-    const layout = computeLayout([], new Map())
-    expect(layout.nodes).toHaveLength(0)
-    expect(layout.edges).toHaveLength(0)
-    expect(layout.totalWidth).toBe(0)
-    expect(layout.totalHeight).toBe(0)
+describe('initialExpanded', () => {
+  const graph = buildSceneGraph(makeSimpleDoc())
+
+  it('opens the scene holding the selected node', () => {
+    expect(initialExpanded(graph, 'node1')).toEqual(new Set([sceneKey('scene1')]))
   })
 
-  it('places a single start node at depth 0', () => {
-    const doc = [makeNode('s', { node_type: 'start' })]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-    expect(layout.nodes).toHaveLength(1)
-    expect(layout.nodes[0]!.id).toBe('s')
-    expect(layout.nodes[0]!.x).toBeGreaterThanOrEqual(0)
+  it('opens the first group when nothing (or an unknown node) is selected', () => {
+    expect(initialExpanded(graph, null)).toEqual(new Set([PREAMBLE_KEY]))
+    expect(initialExpanded(graph, 'ghost')).toEqual(new Set([PREAMBLE_KEY]))
   })
 
-  it('creates edges for choices that reference existing nodes', () => {
-    const doc = [
-      makeNode('a', { node_type: 'start', choices: [makeChoice('b')] }),
-      makeNode('b', { node_type: 'end' }),
-    ]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-    expect(layout.edges).toHaveLength(1)
-    expect(layout.edges[0]!.sourceId).toBe('a')
-    expect(layout.edges[0]!.targetId).toBe('b')
-  })
-
-  it('skips edges for dangling nextNode references', () => {
-    const doc = [
-      makeNode('a', { node_type: 'start', choices: [makeChoice('missing')] }),
-    ]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-    expect(layout.edges).toHaveLength(0)
-  })
-
-  it('places unreachable nodes in a separate column to the right', () => {
-    const doc = [
-      makeNode('s', { node_type: 'start' }),
-      makeNode('orphan'),
-    ]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-
-    const startNode = layout.nodes.find((n) => n.id === 's')!
-    const orphanNode = layout.nodes.find((n) => n.id === 'orphan')!
-    expect(orphanNode.x).toBeGreaterThan(startNode.x)
-  })
-
-  it('records choiceCount on positioned nodes', () => {
-    const doc = [
-      makeNode('a', {
-        node_type: 'start',
-        choices: [makeChoice('b'), makeChoice('c')],
-      }),
-      makeNode('b', { node_type: 'end' }),
-      makeNode('c', { node_type: 'end' }),
-    ]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-    const nodeA = layout.nodes.find((n) => n.id === 'a')!
-    expect(nodeA.choiceCount).toBe(2)
-  })
-
-  it('places nodes at increasing depths from left to right', () => {
-    const doc = [
-      makeNode('a', { node_type: 'start', choices: [makeChoice('b')] }),
-      makeNode('b', { node_type: 'narrative', choices: [makeChoice('c')] }),
-      makeNode('c', { node_type: 'end' }),
-    ]
-    const cache = classifyAll(doc)
-    const layout = computeLayout(doc, cache)
-
-    const xByDepth = layout.nodes
-      .map((n) => ({ id: n.id, x: n.x }))
-      .sort((a, b) => a.x - b.x)
-    expect(xByDepth[0]!.id).toBe('a')
-    expect(xByDepth[2]!.id).toBe('c')
+  it('opens nothing for an adventure with no groups', () => {
+    expect(initialExpanded(buildSceneGraph([]), null)).toEqual(new Set())
   })
 })
 
 // ---------------------------------------------------------------------------
-// edgePath helper
-// ---------------------------------------------------------------------------
-
-describe('edgePath', () => {
-  it('returns a string starting with M for a forward edge', () => {
-    const path = edgePath(0, 0, 200, 0)
-    expect(path).toMatch(/^M/)
-    expect(path).toContain('C')
-  })
-
-  it('returns a path for a back edge (target to the left)', () => {
-    const path = edgePath(300, 100, 50, 200)
-    expect(path).toMatch(/^M/)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// CanvasView — empty state
+// Structure
 // ---------------------------------------------------------------------------
 
 describe('CanvasView — empty state', () => {
   it('shows "No adventure loaded" when document is empty', async () => {
-    const store = await makeStoreWithNodes([])
-    renderCanvas(store)
+    await setup([])
     expect(screen.getByText(/No adventure loaded/i)).toBeTruthy()
   })
 })
 
-// ---------------------------------------------------------------------------
-// CanvasView — swimlane layout
-// ---------------------------------------------------------------------------
-
-describe('CanvasView — swimlane layout', () => {
-  async function setup() {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    const onNodeActivate = vi.fn()
-    const result = renderCanvas(store, onNodeActivate)
-    return { ...result, onNodeActivate }
-  }
-
-  it('renders the scene swimlanes region', async () => {
+describe('CanvasView — structure', () => {
+  it('labels the graph region with node and connection counts', async () => {
     await setup()
-    expect(screen.getByRole('region', { name: /Scene swimlanes/i })).toBeTruthy()
+    expect(graphRegion()).toHaveAccessibleName('Adventure graph: 3 nodes, 2 connections')
   })
 
-  it('renders the preamble section for unscoped nodes', async () => {
+  it('renders a labelled toolbar with the zoom level in a polite live region', async () => {
     await setup()
-    expect(screen.getByRole('region', { name: /Unscoped nodes/i })).toBeTruthy()
+    expect(zoomLevel()).toHaveTextContent('100%')
+    expect(zoomLevel()).toHaveAttribute('aria-live', 'polite')
+    expect(zoomLevel()).toHaveAttribute('aria-atomic', 'true')
   })
 
-  it('renders MiniNode buttons for nodes in the preamble', async () => {
+  it('renders a labelled section per scene group', async () => {
     await setup()
-    // start1 and scene1 both have sceneId=null → preamble
-    // MiniNode aria-label includes the type qualifier, distinguishing it from
-    // the SceneLane header button which also contains the scene title text
-    expect(screen.getByRole('button', { name: /Node start1 \(start\)/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Node scene1 \(scene start\)/i })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Scene: Opening' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Scene: Node scene1' })).toBeTruthy()
   })
 
-  it('renders a SceneLane for each named scene', async () => {
+  it('keeps the NodeDetail and Scene connections sidebar', async () => {
     await setup()
-    // node1 has sceneId='scene1' → one SceneLane
-    expect(screen.getByRole('region', { name: /Scene: Node scene1/i })).toBeTruthy()
-  })
-
-  it('renders MiniNode buttons inside each SceneLane', async () => {
-    await setup()
-    expect(screen.getByRole('button', { name: /Node node1/i })).toBeTruthy()
+    expect(screen.getByText(/Spotlight a node to see its details/i)).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Scene connections' })).toBeTruthy()
   })
 })
 
 // ---------------------------------------------------------------------------
-// CanvasView — NodeDetail sidebar
+// Collapsing scenes
 // ---------------------------------------------------------------------------
 
-describe('CanvasView — NodeDetail sidebar', () => {
-  async function setup() {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    const onNodeActivate = vi.fn()
-    const result = renderCanvas(store, onNodeActivate)
-    return { ...result, onNodeActivate }
-  }
-
-  it('shows the NodeDetail placeholder before any node is spotlighted', async () => {
+describe('CanvasView — collapsible scenes', () => {
+  it('opens the first scene and collapses the rest by default', async () => {
     await setup()
-    expect(screen.getByText(/Spotlight a node to see its details/i)).toBeTruthy()
+    expect(sceneToggle(/Opening/)).toHaveAttribute('aria-expanded', 'true')
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /Node start1 \(start\)/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Node node1 \(narrative\)/ })).toBeNull()
   })
 
-  it('renders the InterSceneConnectors section heading', async () => {
+  it('names each scene toggle with its title and summary', async () => {
     await setup()
-    expect(screen.getByText('Scene connections')).toBeTruthy()
+    expect(sceneToggle(/Node scene1/)).toHaveAccessibleName('Node scene1, 2 nodes')
   })
 
-  it('clicking a MiniNode spotlights it in the NodeDetail panel', async () => {
+  it('expands and collapses a scene from its header', async () => {
     await setup()
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
-    expect(screen.getByRole('heading', { level: 2, name: 'Node node1' })).toBeTruthy()
+    fireEvent.click(sceneToggle(/Node scene1/))
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: /Node node1 \(narrative\)/ })).toBeTruthy()
+    fireEvent.click(sceneToggle(/Node scene1/))
+    expect(screen.queryByRole('button', { name: /Node node1 \(narrative\)/ })).toBeNull()
   })
 
-  it('clicking a MiniNode shows the SpotlightBreadcrumb', async () => {
+  it('expands and collapses every scene from the toolbar', async () => {
     await setup()
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
+    expect(sceneToggle(/Opening/)).toHaveAttribute('aria-expanded', 'true')
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all scenes' }))
+    expect(sceneToggle(/Opening/)).toHaveAttribute('aria-expanded', 'false')
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('opens the scene of a node selected elsewhere (outline / companion panel)', async () => {
+    const { store } = await setup()
+    act(() => store.getState().setSelectedNodeId('node1'))
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('leaves expansion alone when the selection moves within an open scene', async () => {
+    const { store } = await setup()
+    act(() => store.getState().setSelectedNodeId('start1'))
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'false')
+    act(() => store.getState().setSelectedNodeId(null))
+    expect(sceneToggle(/Opening/)).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('starts from the default expansion when another adventure is loaded', async () => {
+    const { store } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all scenes' }))
+    act(() => store.getState().importAdventure(makeSimpleDoc()))
+    expect(sceneToggle(/Opening/)).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Links
+// ---------------------------------------------------------------------------
+
+describe('CanvasView — links', () => {
+  it('draws a link from the open scene into the collapsed one', async () => {
+    const { container } = await setup()
+    const paths = linkPaths(container)
+    expect(paths).toHaveLength(1)
+    expect(paths[0]).toHaveAttribute('data-link-style', 'scene')
+    expect(paths[0]!.getAttribute('d')).toMatch(/^M /)
+  })
+
+  it('draws tree links inside an expanded scene', async () => {
+    const { container } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
+    const styles = linkPaths(container).map((p) => p.getAttribute('data-link-style'))
+    expect(styles.sort()).toEqual(['scene', 'tree'])
+  })
+
+  it('draws loop-backs in the back style', async () => {
+    const { container } = await setup([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('a')] }),
+      makeNode('a', { node_type: 'decision', choices: [makeChoice('s')] }),
+    ])
+    const styles = linkPaths(container).map((p) => p.getAttribute('data-link-style'))
+    expect(styles.sort()).toEqual(['back', 'tree'])
+  })
+
+  it('draws forward cross-links in the cross style', async () => {
+    const { container } = await setup([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('a'), makeChoice('b')] }),
+      makeNode('a', { node_type: 'decision', choices: [makeChoice('c')] }),
+      makeNode('b', { node_type: 'decision', choices: [makeChoice('c')] }),
+      makeNode('c'),
+    ])
+    const styles = linkPaths(container).map((p) => p.getAttribute('data-link-style'))
+    expect(styles).toContain('cross')
+  })
+
+  it('emphasises the spotlighted node’s links and dims the rest', async () => {
+    const { container } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
+    fireEvent.click(screen.getByRole('button', { name: /Node node1 \(narrative\)/ }))
+    const byStyle = Object.fromEntries(
+      linkPaths(container).map((p) => [p.getAttribute('data-link-style'), p.getAttribute('data-emphasis')]),
+    )
+    expect(byStyle).toEqual({ tree: 'focus', scene: 'dimmed' })
+  })
+
+  it('makes the link layer invisible to assistive technology', async () => {
+    const { container } = await setup()
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Spotlight, selection and the sidebar
+// ---------------------------------------------------------------------------
+
+describe('CanvasView — spotlight and sidebar', () => {
+  it('spotlights and selects a node card when it is activated', async () => {
+    const { store } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    expect(screen.getByRole('heading', { level: 2, name: 'Node start1' })).toBeTruthy()
     expect(screen.getByRole('navigation', { name: /Spotlight trail/i })).toBeTruthy()
+    expect(store.getState().selectedNodeId).toBe('start1')
+  })
+
+  it('opens a collapsed scene when a NodeDetail choice leads into it', async () => {
+    const { store } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    const detail = screen.getByRole('complementary', { name: 'Node detail' })
+    fireEvent.click(within(detail).getByRole('button', { name: /Enter/ }))
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'true')
+    expect(store.getState().selectedNodeId).toBe('scene1')
+  })
+
+  it('opens the scene of a breadcrumb entry when navigating back to it', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
+    fireEvent.click(screen.getByRole('button', { name: /Node node1 \(narrative\)/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    fireEvent.click(sceneToggle(/Node scene1/)) // collapse node1's scene
+    const trail = screen.getByRole('navigation', { name: /Spotlight trail/i })
+    fireEvent.click(within(trail).getByRole('button', { name: 'Node node1' }))
+    expect(sceneToggle(/Node scene1/)).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('heading', { level: 2, name: 'Node node1' })).toBeTruthy()
   })
 
   it('"Edit in outline" calls onNodeActivate with the spotlighted node id', async () => {
     const { onNodeActivate } = await setup()
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
     fireEvent.click(screen.getByRole('button', { name: /Edit in outline/i }))
-    expect(onNodeActivate).toHaveBeenCalledWith('node1')
+    expect(onNodeActivate).toHaveBeenCalledWith('start1')
   })
 
-  it('clearing the spotlight restores the placeholder', async () => {
+  it('clears the spotlight from the breadcrumb', async () => {
     await setup()
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
     fireEvent.click(screen.getByRole('button', { name: /Clear spotlight/i }))
+    expect(screen.getByText(/Spotlight a node to see its details/i)).toBeTruthy()
+  })
+
+  it('clears the spotlight when empty canvas is clicked', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    fireEvent.pointerDown(graphRegion(), { button: 0, clientX: 5, clientY: 5 })
+    fireEvent.pointerUp(graphRegion(), { button: 0, clientX: 5, clientY: 5 })
     expect(screen.getByText(/Spotlight a node to see its details/i)).toBeTruthy()
   })
 })
 
 // ---------------------------------------------------------------------------
-// CanvasView — spotlight state variants
+// Pan and zoom
 // ---------------------------------------------------------------------------
 
-describe('CanvasView — spotlight state variants', () => {
-  it('clicking a preamble MiniNode activates spotlight on it', async () => {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    renderCanvas(store)
-    // Click start1 in the preamble
-    fireEvent.click(screen.getByRole('button', { name: /Node start1/i }))
-    // NodeDetail shows start1
+describe('CanvasView — pan and zoom', () => {
+  const world = (container: HTMLElement) =>
+    graphRegion().firstElementChild as HTMLElement ?? container
+
+  it('opens an adventure with its start node on the left, mid-viewport, once measured', async () => {
+    // jsdom has no layout; give every element a 400 × 300 box for this test.
+    const w = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400)
+    const h = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
+    try {
+      const { container } = await setup()
+      // start1's card centre is 74 px down the canvas (12 padding + 36 header + 26).
+      expect(world(container).style.getPropertyValue('--pan-x')).toBe('16px')
+      expect(world(container).style.getPropertyValue('--pan-y')).toBe(`${150 - 74}px`)
+    } finally {
+      w.mockRestore()
+      h.mockRestore()
+    }
+  })
+
+  it('zooms in and out from the toolbar', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(zoomLevel()).toHaveTextContent('120%')
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
+    expect(zoomLevel()).toHaveTextContent('83%')
+  })
+
+  it('resets and fits the view', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reset view' }))
+    expect(zoomLevel()).toHaveTextContent('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    // jsdom reports a 0 × 0 viewport, so fitting falls back to the initial view
+    fireEvent.click(screen.getByRole('button', { name: 'Fit to view' }))
+    expect(zoomLevel()).toHaveTextContent('100%')
+  })
+
+  it('zooms with the mouse wheel without scrolling the page', async () => {
+    await setup()
+    const wheel = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true })
+    act(() => {
+      graphRegion().dispatchEvent(wheel)
+    })
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(zoomLevel()).toHaveTextContent('120%')
+    act(() => {
+      graphRegion().dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true, cancelable: true }))
+    })
+    expect(zoomLevel()).toHaveTextContent('100%')
+  })
+
+  it('pans by dragging empty canvas without clearing the spotlight', async () => {
+    const { container } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    fireEvent.pointerDown(graphRegion(), { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(graphRegion(), { clientX: 40, clientY: 30 })
+    fireEvent.pointerUp(graphRegion(), { clientX: 40, clientY: 30 })
+    expect(world(container).style.getPropertyValue('--pan-x')).toBe('46px')
+    expect(world(container).style.getPropertyValue('--pan-y')).toBe('36px')
     expect(screen.getByRole('heading', { level: 2, name: 'Node start1' })).toBeTruthy()
   })
 
-  it('clicking a second node appends to the breadcrumb', async () => {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    renderCanvas(store)
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Node start1/i }))
-    // Both entries appear in the breadcrumb nav
-    const trail = screen.getByRole('navigation', { name: /Spotlight trail/i })
-    expect(trail).toBeTruthy()
+  it('ignores presses that start on a button, other mouse buttons and cancelled drags', async () => {
+    const { container } = await setup()
+    const card = screen.getByRole('button', { name: /Node start1 \(start\)/ })
+    fireEvent.pointerDown(card, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(graphRegion(), { clientX: 60, clientY: 60 })
+    fireEvent.pointerDown(graphRegion(), { button: 2, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(graphRegion(), { clientX: 60, clientY: 60 })
+    fireEvent.pointerDown(graphRegion(), { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerCancel(graphRegion())
+    fireEvent.pointerMove(graphRegion(), { clientX: 60, clientY: 60 })
+    expect(world(container).style.getPropertyValue('--pan-x')).toBe('16px')
   })
 })
 
@@ -300,24 +393,20 @@ describe('CanvasView — spotlight state variants', () => {
 // ---------------------------------------------------------------------------
 
 describe('CanvasView — axe-core', () => {
-  it('has no axe-core violations on the empty state', async () => {
-    const store = await makeStoreWithNodes([])
-    const { container } = renderCanvas(store)
+  it('has no violations on the empty state', async () => {
+    const { container } = await setup([])
     expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('has no axe-core violations with a populated adventure (no spotlight)', async () => {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    const { container } = renderCanvas(store)
+  it('has no violations with the default expansion', async () => {
+    const { container } = await setup()
     expect(await axe(container)).toHaveNoViolations()
   })
 
-  it('has no axe-core violations after spotlight activation', async () => {
-    const doc = makeSimpleDoc()
-    const store = await makeStoreWithNodes(doc)
-    const { container } = renderCanvas(store)
-    fireEvent.click(screen.getByRole('button', { name: /Node node1/i }))
+  it('has no violations with every scene expanded and a node spotlighted', async () => {
+    const { container } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
+    fireEvent.click(screen.getByRole('button', { name: /Node node1 \(narrative\)/ }))
     expect(await axe(container)).toHaveNoViolations()
   })
 })
