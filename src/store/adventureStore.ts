@@ -152,14 +152,21 @@ export interface AdventureActions {
    *
    * The stub has `node_type: 'decision'`, an empty `narrativeText`, and an
    * empty `choices` array.  Its id is a UUID generated via `crypto.randomUUID`.
+   * Its title is `title` trimmed, or "New node" when that is absent or blank
+   * (the CompanionPanel "New node title" box supplies it).
+   *
+   * Passing `choiceIndex === choices.length` appends a new (empty-text)
+   * choice that leads to the stub — the canvas "Add choice" action (OPS-583).
    *
    * Both the new node and the updated choice are written in a single
    * `set()` call so the document is never transiently invalid.
    *
    * @returns The id of the newly created node.
    * @throws {StoreActionError} NODE_NOT_FOUND if `nodeId` is absent.
+   * @throws {StoreActionError} TERMINAL_NODE_MUTATION if appending a choice
+   *   to a terminal node.
    */
-  createNodeAndLinkChoice(nodeId: string, choiceIndex: number): string
+  createNodeAndLinkChoice(nodeId: string, choiceIndex: number, title?: string): string
 }
 
 export type AdventureStoreState = AdventureState & AdventureActions
@@ -487,22 +494,32 @@ export function createAdventureStore(repository: AdventureRepository) {
           )
         },
 
-        createNodeAndLinkChoice: (nodeId, choiceIndex) => {
+        createNodeAndLinkChoice: (nodeId, choiceIndex, title) => {
           const currentDocument = get().document
           const idx = requireNodeIndex(currentDocument, nodeId)
           const node = currentDocument[idx]!
+          const appending = choiceIndex === node.choices.length
+
+          if (appending && isTerminalNodeType(node.node_type)) {
+            throw new StoreActionError(
+              `Cannot add a choice to terminal node "${nodeId}" (node_type: ${node.node_type})`,
+              'TERMINAL_NODE_MUTATION',
+            )
+          }
 
           const stubNode: AdventureNode = {
             id: crypto.randomUUID(),
-            title: 'New node',
+            title: title?.trim() || 'New node',
             node_type: 'decision',
             narrativeText: '',
             choices: [],
           }
 
-          const updatedChoices = node.choices.map((c, i) =>
-            i === choiceIndex ? { ...c, nextNode: stubNode.id } : c,
-          )
+          const updatedChoices = appending
+            ? [...node.choices, { choiceText: '', choiceResponseConstraint: '', nextNode: stubNode.id }]
+            : node.choices.map((c, i) =>
+                i === choiceIndex ? { ...c, nextNode: stubNode.id } : c,
+              )
           const updatedNode: AdventureNode = { ...node, choices: updatedChoices }
 
           const newDocument = [
@@ -530,3 +547,14 @@ export function createAdventureStore(repository: AdventureRepository) {
 
 /** Type alias for the store returned by `createAdventureStore`. */
 export type AdventureStore = ReturnType<typeof createAdventureStore>
+
+// Development only.  App.tsx keeps the store instance in a ref, which survives
+// React Fast Refresh, so hot-swapping this module would leave the running app
+// on the previous action implementations (e.g. createNodeAndLinkChoice ignoring
+// its new title argument).  Reload the page instead so the store is rebuilt.
+// Unsaved edits are lost on that reload, as with any full page refresh.
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    window.location.reload()
+  })
+}

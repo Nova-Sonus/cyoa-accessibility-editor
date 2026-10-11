@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { axe } from 'jest-axe'
 import { CompanionPanel } from './CompanionPanel'
 import { AdventureStoreProvider } from '../../store/StoreContext'
@@ -182,6 +183,19 @@ describe('CompanionPanel — audio section', () => {
     fireEvent.click(screen.getByRole('button', { name: /Audio/i }))
     const entryFoleyInput = screen.getByLabelText('Entry foley') as HTMLInputElement
     expect(entryFoleyInput.value).toBe('cave_entrance.mp3')
+  })
+
+  it('closes an audio suggestion list when focus moves on with Tab', async () => {
+    const user = userEvent.setup()
+    const store = await makeStore([makeNode('n1'), makeNode('n2', { entry_foley: 'cave.mp3' })])
+    store.getState().setSelectedNodeId('n1')
+    renderPanel(store)
+    fireEvent.click(screen.getByRole('button', { name: /Audio/i }))
+    const entryFoley = screen.getByLabelText('Entry foley')
+    await user.click(entryFoley)
+    expect(entryFoley).toHaveAttribute('aria-expanded', 'true')
+    await user.tab()
+    expect(entryFoley).toHaveAttribute('aria-expanded', 'false')
   })
 })
 
@@ -437,6 +451,124 @@ describe('CompanionPanel — NodeComboField (next node)', () => {
     const newNode = doc.find((n) => n.id !== 'n1')!
     expect(newNode.node_type).toBe('decision')
     expect(doc[0]!.choices[0]!.nextNode).toBe(newNode.id)
+  })
+
+  describe('New node title box', () => {
+    async function setupTitled() {
+      const store = await makeStore([
+        makeNode('n1', {
+          choices: [
+            { choiceText: 'Go', choiceResponseConstraint: '', nextNode: '' },
+            { choiceText: 'Stay', choiceResponseConstraint: '', nextNode: '' },
+          ],
+        }),
+      ])
+      store.getState().setSelectedNodeId('n1')
+      const result = renderPanel(store)
+      const boxes = screen.getAllByLabelText('New node title') as HTMLInputElement[]
+      return { store, boxes, ...result }
+    }
+
+    it('shows one box with a create button per choice, before the Next node picker', async () => {
+      const { boxes } = await setupTitled()
+      expect(boxes).toHaveLength(2)
+      const picker = screen.getAllByLabelText('Next node')[0]!
+      expect(boxes[0]!.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Create node and link choice 1' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Create node and link choice 2' })).toBeTruthy()
+    })
+
+    it('Enter creates a node with the typed title and links that choice to it', async () => {
+      const { store, boxes } = await setupTitled()
+      fireEvent.change(boxes[1]!, { target: { value: 'The Old Mill' } })
+      act(() => {
+        fireEvent.keyDown(boxes[1]!, { key: 'Enter' })
+      })
+      const doc = store.getState().document
+      const created = doc.find((n) => n.id !== 'n1')!
+      expect(created.title).toBe('The Old Mill')
+      expect(created.node_type).toBe('decision')
+      expect(doc[0]!.choices[1]!.nextNode).toBe(created.id)
+      expect(doc[0]!.choices[0]!.nextNode).toBe('')
+      // The box clears and the picker now shows the new node.
+      expect(boxes[1]!.value).toBe('')
+      expect((screen.getAllByLabelText('Next node')[1] as HTMLInputElement).value).toBe('The Old Mill')
+    })
+
+    it('the + button creates the node with the trimmed title', async () => {
+      const { store, boxes } = await setupTitled()
+      fireEvent.change(boxes[0]!, { target: { value: '  Cellar  ' } })
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create node and link choice 1' }))
+      })
+      const doc = store.getState().document
+      expect(doc.find((n) => n.id !== 'n1')!.title).toBe('Cellar')
+      expect(doc[0]!.choices[0]!.nextNode).not.toBe('')
+    })
+
+    it('does nothing while the title is empty or blank', async () => {
+      const { store, boxes } = await setupTitled()
+      const plus = screen.getByRole('button', { name: 'Create node and link choice 1' })
+      expect(plus).toBeDisabled()
+      fireEvent.change(boxes[0]!, { target: { value: '   ' } })
+      expect(plus).toBeDisabled()
+      fireEvent.keyDown(boxes[0]!, { key: 'Enter' })
+      fireEvent.keyDown(boxes[0]!, { key: 'a' })
+      expect(store.getState().document).toHaveLength(1)
+    })
+
+    it('has no axe violations', async () => {
+      const { container, boxes } = await setupTitled()
+      fireEvent.change(boxes[0]!, { target: { value: 'Typed' } })
+      expect(await axe(container)).toHaveNoViolations()
+    })
+  })
+
+  describe('closing when focus leaves', () => {
+    async function setupPicker() {
+      const user = userEvent.setup()
+      const store = await makeStore([
+        makeNode('n1', {
+          choices: [{ choiceText: 'Go', choiceResponseConstraint: '', nextNode: 'n2' }],
+        }),
+        makeNode('n2', { title: 'Node Two' }),
+      ])
+      store.getState().setSelectedNodeId('n1')
+      renderPanel(store)
+      const picker = screen.getByLabelText('Next node') as HTMLInputElement
+      return { user, store, picker }
+    }
+
+    it('closes the node list when Tab moves focus out of Next node', async () => {
+      const { user, picker } = await setupPicker()
+      await user.click(picker)
+      expect(picker).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByRole('listbox')).toBeVisible()
+      await user.tab()
+      expect(picker).not.toHaveFocus()
+      expect(picker).toHaveAttribute('aria-expanded', 'false')
+      expect(document.getElementById(picker.getAttribute('aria-controls')!)).not.toBeVisible()
+    })
+
+    it('closes the list and restores the chosen title when another field is clicked', async () => {
+      const { user, store, picker } = await setupPicker()
+      await user.click(picker)
+      await user.clear(picker)
+      await user.type(picker, 'No')
+      await user.click(screen.getByLabelText('Choice text'))
+      expect(picker).toHaveAttribute('aria-expanded', 'false')
+      expect(picker.value).toBe('Node Two')
+      expect(store.getState().document[0]!.choices[0]!.nextNode).toBe('n2')
+    })
+
+    it('stays open while focus moves within the picker', async () => {
+      const { user, picker } = await setupPicker()
+      await user.click(picker)
+      act(() => {
+        fireEvent.blur(picker, { relatedTarget: screen.getByRole('listbox') })
+      })
+      expect(picker).toHaveAttribute('aria-expanded', 'true')
+    })
   })
 
   it('ArrowDown opens listbox', async () => {

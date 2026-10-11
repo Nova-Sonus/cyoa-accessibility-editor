@@ -1,11 +1,15 @@
+/* Exactly the window's height: the outline scrolls inside .main and the canvas
+   tab is held to the remaining height, so a long CompanionPanel scrolls
+   internally instead of stretching the canvas and scrolling the page. */
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
 }
 
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: auto;

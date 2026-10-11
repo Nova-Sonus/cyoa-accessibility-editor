@@ -101,7 +101,18 @@ export function NodeComboField({ label, value, onChange, onCreateNew, allNodes }
   const activeDescendant = activeIndex >= 0 ? optionId(activeIndex) : undefined
 
   return (
-    <div className={styles.comboField} ref={containerRef}>
+    <div
+      className={styles.comboField}
+      ref={containerRef}
+      onBlur={(e) => {
+        // Focus left the picker (Tab, or a click into another field): close the
+        // list and show the chosen node again, as clicking outside does.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        setOpen(false)
+        setActiveIndex(-1)
+        setInputValue(allNodes.find((n) => n.id === value)?.title ?? '')
+      }}
+    >
       <label className={styles.comboLabel} htmlFor={inputId}>
         {label}
       </label>

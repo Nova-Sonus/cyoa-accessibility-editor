@@ -70,7 +70,16 @@ export function AudioComboField({ label, value, onChange, suggestions }: AudioCo
   }
 
   return (
-    <div className={styles.comboField} ref={containerRef}>
+    <div
+      className={styles.comboField}
+      ref={containerRef}
+      onBlur={(e) => {
+        // Focus left the picker (Tab, or a click into another field): close the list.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        setOpen(false)
+        setActiveIndex(-1)
+      }}
+    >
       <label className={styles.comboLabel} htmlFor={inputId}>{label}</label>
       <div className={styles.comboInputWrapper}>
         <input

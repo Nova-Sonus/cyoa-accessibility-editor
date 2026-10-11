@@ -766,3 +766,130 @@ test.describe('Issues panel — structural guarantees', () => {
     await expect(issueButtons).not.toHaveCount(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Authoring from the canvas (OPS-583) — the OPS-577 AC 1–3 flow in the
+// running app: add choices from the start card and watch the canvas re-flow.
+// ---------------------------------------------------------------------------
+
+test.describe('Authoring from the canvas', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await clearStorage(page)
+    await page.reload()
+    await page.getByRole('button', { name: 'New adventure' }).click()
+    await expect(page.getByRole('region', { name: /Adventure graph/i })).toBeVisible()
+  })
+
+  const startCard = (page: Page) => page.getByRole('button', { name: /New Adventure \(start\)/ })
+  const newCards = (page: Page) => page.getByRole('button', { name: /^New node \(decision\)/ })
+  const addChoice = (page: Page) => page.getByRole('button', { name: /^Add choice to / })
+  /** Waits for the re-layout animation to finish. */
+  const settled = (page: Page) => expect(page.locator('[data-entering]')).toHaveCount(0)
+
+  test('new choices place connected nodes to the right, then below', async ({ page }) => {
+    await startCard(page).click()
+    await addChoice(page).click()
+    await expect(newCards(page)).toHaveCount(1)
+    await expect(newCards(page).first()).toBeFocused()
+
+    await startCard(page).click()
+    await addChoice(page).click()
+    await expect(newCards(page)).toHaveCount(2)
+    await settled(page)
+
+    // Compare centres: spotlight states scale cards about their centre.
+    const centre = async (card: ReturnType<typeof startCard>) => {
+      const b = (await card.boundingBox())!
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+    }
+    const start = await centre(startCard(page))
+    const first = await centre(newCards(page).nth(0))
+    const second = await centre(newCards(page).nth(1))
+    expect(first.x - start.x).toBeGreaterThanOrEqual(160) // a full column to the right
+    expect(Math.abs(second.x - first.x)).toBeLessThan(1)
+    expect(second.y - first.y).toBeGreaterThanOrEqual(52) // a full card height below
+    await expect(page.locator('path[data-link-style="tree"]')).toHaveCount(2)
+  })
+
+  test('a node created from the companion panel appears on screen in a large adventure', async ({ page }) => {
+    // Regression: the canvas tab grew with the CompanionPanel's choice list,
+    // so the page scrolled the canvas away, and native scrolling of the
+    // overflow-hidden viewport left the view maths off by thousands of px.
+    await page.locator('input[type="file"]').setInputFiles('fixtures/Caves_Of_Bane.json')
+    const graph = page.getByRole('region', { name: /Adventure graph/i })
+    await expect(graph).toHaveAccessibleName(/311 nodes/)
+    await graph.getByRole('region', { name: 'Scene: Approaching the First Hamlet' })
+      .getByRole('button').first().click()
+    await graph.getByRole('button', { name: /^Legends and Warnings \(/ }).click()
+
+    const editor = page.getByRole('complementary', { name: 'Node editor' })
+    await editor.getByRole('button', { name: /Add choice/ }).click()
+    await editor.getByRole('combobox').last().focus()
+    await editor.getByRole('option', { name: /Create new node/ }).last().dispatchEvent('mousedown')
+    await expect(graph).toHaveAccessibleName(/312 nodes/)
+    await settled(page)
+
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    const area = (await graph.boundingBox())!
+    const card = (await graph.getByRole('button', { name: /^New node \(decision\)/ }).boundingBox())!
+    expect(card.x).toBeGreaterThanOrEqual(area.x)
+    expect(card.y).toBeGreaterThanOrEqual(area.y)
+    expect(card.x + card.width).toBeLessThanOrEqual(area.x + area.width)
+    expect(card.y + card.height).toBeLessThanOrEqual(area.y + area.height)
+  })
+
+  test('a titled node typed into a choice row appears on the canvas (Enter and + button)', async ({ page }) => {
+    const graph = page.getByRole('region', { name: /Adventure graph/i })
+    const editor = page.getByRole('complementary', { name: 'Node editor' })
+    const onScreen = async (name: RegExp) => {
+      const area = (await graph.boundingBox())!
+      const card = (await graph.getByRole('button', { name }).boundingBox())!
+      return card.x >= area.x && card.y >= area.y
+        && card.x + card.width <= area.x + area.width && card.y + card.height <= area.y + area.height
+    }
+
+    // A new choice, titled with Enter.
+    await startCard(page).click()
+    await editor.getByRole('button', { name: /Add choice/ }).click()
+    const box = editor.getByLabel('New node title').last()
+    await box.fill('The Old Mill')
+    await box.press('Enter')
+    await settled(page)
+    await expect(graph.getByRole('button', { name: /^The Old Mill \(decision\)/ })).toBeVisible()
+    expect(await onScreen(/^The Old Mill \(decision\)/)).toBe(true)
+    await expect(page.locator('path[data-link-style="tree"]')).toHaveCount(1)
+    await expect(box).toHaveValue('')
+
+    // A second choice, titled with the + button.
+    await editor.getByRole('button', { name: /Add choice/ }).click()
+    await editor.getByLabel('New node title').last().fill('The River')
+    await editor.getByRole('button', { name: 'Create node and link choice 2' }).click()
+    await settled(page)
+    expect(await onScreen(/^The River \(decision\)/)).toBe(true)
+    await expect(page.locator('path[data-link-style="tree"]')).toHaveCount(2)
+  })
+
+  test('the graph has no axe violations with "Add choice" shown, and it meets 24×24 px', async ({ page }) => {
+    await startCard(page).click()
+    const box = (await addChoice(page).boundingBox())!
+    expect(box.width).toBeGreaterThanOrEqual(24)
+    expect(box.height).toBeGreaterThanOrEqual(24)
+    // Scoped to the graph: selecting a node also shows the NodeDetail and
+    // CompanionPanel footers, whose grey text fails colour contrast — a
+    // separate, pre-existing issue (see the OPS-584 accessibility pass).
+    const results = await new AxeBuilder({ page })
+      .include('[role="region"][aria-label^="Adventure graph"]')
+      .withTags(WCAG_TAGS)
+      .analyze()
+    expect(results.violations).toEqual([])
+  })
+
+  test('re-lays out without animation when reduced motion is preferred', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await startCard(page).click()
+    await addChoice(page).click()
+    await expect(newCards(page)).toHaveCount(1)
+    expect(await page.locator('[data-entering]').count()).toBe(0)
+  })
+})

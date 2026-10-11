@@ -84,6 +84,10 @@ export interface PanZoom {
    * Returns false, changing nothing, while the viewport is unmeasured.
    */
   showStart: (cy: number) => boolean
+  /** Replaces the view outright (re-layout anchoring, OPS-583). */
+  setView: (view: View) => void
+  /** Current viewport size in screen pixels; [0, 0] while unmeasured. */
+  viewportSize: () => [number, number]
   /** Spread onto the viewport element to enable drag-to-pan. */
   pointerHandlers: {
     onPointerDown: (e: PointerEvent<HTMLElement>) => void
@@ -127,8 +131,23 @@ export function usePanZoom(
       const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
       setView((v) => zoomAround(v, factor, e.clientX - rect.left, e.clientY - rect.top))
     }
+    // The viewport is overflow: hidden, but browsers still scroll it natively
+    // to bring a focused card into view (Tab, focus(), find-in-page).  That
+    // offset is invisible to the view maths, so fold it into the pan instead.
+    const onScroll = () => {
+      const dx = el.scrollLeft
+      const dy = el.scrollTop
+      if (dx === 0 && dy === 0) return
+      el.scrollLeft = 0
+      el.scrollTop = 0
+      setView((v) => ({ ...v, x: v.x - dx, y: v.y - dy }))
+    }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    el.addEventListener('scroll', onScroll)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('scroll', onScroll)
+    }
   }, [viewportRef, enabled])
 
   const zoomBy = useCallback((factor: number) => {
@@ -189,6 +208,8 @@ export function usePanZoom(
     fit,
     centreOn,
     showStart,
+    setView,
+    viewportSize,
     pointerHandlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },
   }
 }

@@ -3,6 +3,7 @@ import { createAdventureStore } from './adventureStore'
 import { StoreActionError } from './errors'
 import { InMemoryRepository } from '../repository/InMemoryRepository'
 import type { Adventure, AdventureNode, Choice } from '../types/adventure'
+import { getValidationErrors } from '../validation/validator'
 import cavesFixture from '../../fixtures/Caves_Of_Bane.json'
 
 // ---------------------------------------------------------------------------
@@ -422,6 +423,18 @@ describe('createNodeAndLinkChoice', () => {
     expect(stub.choices).toHaveLength(0)
   })
 
+  it('titles the new node with the given title, trimmed', async () => {
+    const store = await makeStoreWithAdventure([makeNode('a', { choices: [makeChoice('')] })])
+    const newId = store.getState().createNodeAndLinkChoice('a', 0, '  The Old Mill  ')
+    expect(store.getState().document.find((n) => n.id === newId)!.title).toBe('The Old Mill')
+  })
+
+  it('falls back to "New node" for a blank title', async () => {
+    const store = await makeStoreWithAdventure([makeNode('a', { choices: [makeChoice('')] })])
+    const newId = store.getState().createNodeAndLinkChoice('a', 0, '   ')
+    expect(store.getState().document.find((n) => n.id === newId)!.title).toBe('New node')
+  })
+
   it('sets the choice nextNode to the stub id atomically', async () => {
     const store = await makeStoreWithAdventure([
       makeNode('a', { choices: [makeChoice('')] }),
@@ -476,6 +489,44 @@ describe('createNodeAndLinkChoice', () => {
 
     const { classifierCache } = store.getState()
     expect(classifierCache.has(newId)).toBe(true)
+  })
+
+  it('appends a new choice leading to the stub when choiceIndex is choices.length', async () => {
+    const store = await makeStoreWithAdventure([
+      makeNode('a', { node_type: 'start', choices: [makeChoice('b')] }),
+      makeNode('b'),
+    ])
+
+    const newId = store.getState().createNodeAndLinkChoice('a', 1)
+
+    const { document } = store.getState()
+    const node = document.find((n) => n.id === 'a')!
+    expect(node.choices).toEqual([
+      makeChoice('b'),
+      { choiceText: '', choiceResponseConstraint: '', nextNode: newId },
+    ])
+    expect(document.find((n) => n.id === newId)).toBeDefined()
+    expect(getValidationErrors(document)).toEqual([])
+  })
+
+  it('appends to a node with no choices yet', async () => {
+    const store = await makeStoreWithAdventure([makeNode('a', { node_type: 'start' })])
+
+    const newId = store.getState().createNodeAndLinkChoice('a', 0)
+
+    expect(store.getState().document[0]!.choices).toEqual([
+      { choiceText: '', choiceResponseConstraint: '', nextNode: newId },
+    ])
+  })
+
+  it('throws TERMINAL_NODE_MUTATION when appending to a terminal node, changing nothing', async () => {
+    const store = await makeStoreWithAdventure([makeNode('a', { node_type: 'end' })])
+    const before = store.getState().document
+
+    expect(() => store.getState().createNodeAndLinkChoice('a', 0)).toThrow(
+      expect.objectContaining({ code: 'TERMINAL_NODE_MUTATION' }),
+    )
+    expect(store.getState().document).toBe(before)
   })
 })
 

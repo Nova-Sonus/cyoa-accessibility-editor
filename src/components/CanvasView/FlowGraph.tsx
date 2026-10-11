@@ -1,5 +1,6 @@
-import { useId } from 'react'
+import { Fragment, useId } from 'react'
 import type { AdventureNode } from '../../types/adventure'
+import { isTerminalNodeType } from '../../types/adventure'
 import type { ClassifierTags, NodeId } from '../../classifier'
 import { NODE_COLOURS } from '../../styles/tokens'
 import type { NodeColours } from '../../styles/tokens'
@@ -11,6 +12,8 @@ import type { CanvasLayout, SceneBox } from './sceneLayout'
 import { toSvgPath } from './linkRouting'
 import type { RoutedLink } from './linkRouting'
 import type { View } from './usePanZoom'
+import { linkKey, NOTHING_ENTERING } from './relayout'
+import type { Entering } from './relayout'
 import styles from './FlowGraph.module.css'
 
 // ---------------------------------------------------------------------------
@@ -91,6 +94,11 @@ export interface FlowGraphProps {
   spotlightNodeIds: ReadonlySet<string> | null
   onNodeActivate: (nodeId: string) => void
   onToggleScene: (key: SceneKey) => void
+  /** Adds a choice leading to a new node; offered on the focused card (OPS-583). */
+  onAddChoice?: (nodeId: string) => void
+  /** Items fading in during a re-layout animation, drawn at `enterOpacity`. */
+  entering?: Entering
+  enterOpacity?: number
 }
 
 /**
@@ -113,8 +121,33 @@ export function FlowGraph({
   spotlightNodeIds,
   onNodeActivate,
   onToggleScene,
+  onAddChoice,
+  entering = NOTHING_ENTERING,
+  enterOpacity = 1,
 }: FlowGraphProps) {
   const markerPrefix = `flow-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+
+  const renderLink = (link: RoutedLink) => {
+    const s = linkStyle(link)
+    const emphasis = focusNodeId === null
+      ? undefined
+      : link.from === focusNodeId || link.to === focusNodeId ? 'focus' : 'dimmed'
+    const emphasisClass = emphasis === 'focus'
+      ? styles.linkFocus
+      : emphasis === 'dimmed' ? styles.linkDimmed : undefined
+    return (
+      <path
+        key={linkKey(link)}
+        d={toSvgPath(link.points)}
+        className={[styles.link, styles[`link_${s}`], emphasisClass].filter(Boolean).join(' ')}
+        markerEnd={`url(#${markerPrefix}-${s})`}
+        data-link-style={s}
+        data-emphasis={emphasis}
+      />
+    )
+  }
+  const settledLinks = links.filter((l) => !entering.links.has(linkKey(l)))
+  const enteringLinks = links.filter((l) => entering.links.has(linkKey(l)))
 
   return (
     <div
@@ -141,6 +174,9 @@ export function FlowGraph({
           spotlightNodeIds={spotlightNodeIds}
           onNodeActivate={onNodeActivate}
           onToggleScene={onToggleScene}
+          onAddChoice={onAddChoice}
+          entering={entering}
+          enterOpacity={enterOpacity}
         />
       ))}
 
@@ -167,25 +203,12 @@ export function FlowGraph({
             </marker>
           ))}
         </defs>
-        {links.map((link) => {
-          const s = linkStyle(link)
-          const emphasis = focusNodeId === null
-            ? undefined
-            : link.from === focusNodeId || link.to === focusNodeId ? 'focus' : 'dimmed'
-          const emphasisClass = emphasis === 'focus'
-            ? styles.linkFocus
-            : emphasis === 'dimmed' ? styles.linkDimmed : undefined
-          return (
-            <path
-              key={`${link.from}#${link.choiceIndex}`}
-              d={toSvgPath(link.points)}
-              className={[styles.link, styles[`link_${s}`], emphasisClass].filter(Boolean).join(' ')}
-              markerEnd={`url(#${markerPrefix}-${s})`}
-              data-link-style={s}
-              data-emphasis={emphasis}
-            />
-          )
-        })}
+        {settledLinks.map(renderLink)}
+        {enteringLinks.length > 0 && (
+          <g opacity={enterOpacity} data-entering="">
+            {enteringLinks.map(renderLink)}
+          </g>
+        )}
       </svg>
     </div>
   )
@@ -205,7 +228,13 @@ interface SceneBoxViewProps {
   spotlightNodeIds: ReadonlySet<string> | null
   onNodeActivate: (nodeId: string) => void
   onToggleScene: (key: SceneKey) => void
+  onAddChoice: ((nodeId: string) => void) | undefined
+  entering: Entering
+  enterOpacity: number
 }
+
+/** Side of the square "Add choice" button, in canvas pixels. */
+const ADD_CHOICE_SIZE = 24
 
 function SceneBoxView({
   group,
@@ -217,6 +246,9 @@ function SceneBoxView({
   spotlightNodeIds,
   onNodeActivate,
   onToggleScene,
+  onAddChoice,
+  entering,
+  enterOpacity,
 }: SceneBoxViewProps) {
   const title = sceneTitle(group, nodesById)
   const summary = sceneSummary(group, classifierCache)
@@ -228,6 +260,7 @@ function SceneBoxView({
       className={styles.scene}
       data-expanded={box.expanded ? '' : undefined}
       data-kind={group.kind}
+      data-entering={entering.scenes.has(group.key) ? '' : undefined}
       style={
         {
           '--x': `${box.x}px`,
@@ -238,6 +271,7 @@ function SceneBoxView({
           '--scene-border': colours.border,
           '--scene-bg': colours.bg,
           '--scene-text': colours.text,
+          '--enter': enterOpacity,
         } as React.CSSProperties
       }
     >
@@ -262,26 +296,52 @@ function SceneBoxView({
         const tags = classifierCache.get(id)
         if (node === undefined || tags === undefined) return null
         const card = layout.nodes.get(id)!
+        const x = card.x - box.x
+        const y = card.y - box.y
+        const canAddChoice =
+          onAddChoice !== undefined && id === focusNodeId && !isTerminalNodeType(node.node_type)
         return (
-          <div
-            key={id}
-            className={styles.nodeSlot}
-            style={
-              {
-                '--x': `${card.x - box.x}px`,
-                '--y': `${card.y - box.y}px`,
-                '--w': `${card.width}px`,
-                '--h': `${card.height}px`,
-              } as React.CSSProperties
-            }
-          >
-            <MiniNode
-              node={node}
-              tags={tags}
-              spotlightState={computeSpotlightState(id, focusNodeId, spotlightNodeIds)}
-              onActivate={onNodeActivate}
-            />
-          </div>
+          <Fragment key={id}>
+            <div
+              className={styles.nodeSlot}
+              data-node-id={id}
+              data-entering={entering.nodes.has(id) ? '' : undefined}
+              style={
+                {
+                  '--x': `${x}px`,
+                  '--y': `${y}px`,
+                  '--w': `${card.width}px`,
+                  '--h': `${card.height}px`,
+                  '--enter': enterOpacity,
+                } as React.CSSProperties
+              }
+            >
+              <MiniNode
+                node={node}
+                tags={tags}
+                spotlightState={computeSpotlightState(id, focusNodeId, spotlightNodeIds)}
+                onActivate={onNodeActivate}
+              />
+            </div>
+            {canAddChoice && (
+              <button
+                type="button"
+                className={styles.addChoice}
+                aria-label={`Add choice to ${node.title}`}
+                title="Add choice"
+                onClick={() => onAddChoice(id)}
+                style={
+                  {
+                    '--x': `${x + card.width - ADD_CHOICE_SIZE / 2}px`,
+                    '--y': `${y - ADD_CHOICE_SIZE / 2}px`,
+                    '--size': `${ADD_CHOICE_SIZE}px`,
+                  } as React.CSSProperties
+                }
+              >
+                <span aria-hidden="true">+</span>
+              </button>
+            )}
+          </Fragment>
         )
       })}
     </section>

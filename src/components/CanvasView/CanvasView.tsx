@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAdventureStore } from '../../store/StoreContext'
 import { SpotlightBreadcrumb } from './SpotlightBreadcrumb'
 import { NodeDetail } from './NodeDetail'
@@ -10,7 +10,11 @@ import { getInterSceneEdges } from './canvasUtils'
 import { buildSceneGraph } from './sceneGraph'
 import type { SceneGraph, SceneKey } from './sceneGraph'
 import { layoutCanvas } from './sceneLayout'
+import type { CanvasLayout } from './sceneLayout'
 import { routeLinks } from './linkRouting'
+import { anchorView } from './relayout'
+import type { Anchor } from './relayout'
+import { useRelayoutTween } from './useRelayoutTween'
 import styles from './CanvasView.module.css'
 
 // ---------------------------------------------------------------------------
@@ -26,6 +30,18 @@ export function initialExpanded(graph: SceneGraph, selectedNodeId: string | null
   if (key !== undefined) return new Set([key])
   return new Set(graph.groups.slice(0, 1).map((g) => g.key))
 }
+
+/**
+ * How the view should follow the next re-layout, when an action knows better
+ * than the default (keep the selected node still and in view).
+ */
+interface RelayoutRequest {
+  anchor: Anchor | null
+  keepVisible: readonly string[]
+}
+
+/** The view was already placed for the new layout: leave it alone. */
+const VIEW_ALREADY_PLACED: RelayoutRequest = { anchor: null, keepVisible: [] }
 
 // ---------------------------------------------------------------------------
 // Props
@@ -55,6 +71,7 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   const adventureId = useAdventureStore((s) => s.adventureId)
   const selectedNodeId = useAdventureStore((s) => s.selectedNodeId)
   const setSelectedNodeId = useAdventureStore((s) => s.setSelectedNodeId)
+  const createNodeAndLinkChoice = useAdventureStore((s) => s.createNodeAndLinkChoice)
 
   const { focusNodeId, spotlightNodeIds, breadcrumb, activate, clear, navigateTo } =
     useSpotlight(adventureDoc)
@@ -92,8 +109,49 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
 
   // ---- Pan / zoom -----------------------------------------------------------
   const viewportRef = useRef<HTMLDivElement>(null)
-  const { view, zoomIn, zoomOut, reset, fit, centreOn, showStart, pointerHandlers } =
-    usePanZoom(viewportRef, clear, adventureDoc.length > 0)
+  const {
+    view, zoomIn, zoomOut, reset, fit, centreOn, showStart, setView, viewportSize, pointerHandlers,
+  } = usePanZoom(viewportRef, clear, adventureDoc.length > 0)
+
+  // ---- Re-layout: anchoring and animation (OPS-583) --------------------------
+  // Runs before paint after every render that changed the layout (an edit, a
+  // scene toggle, a new selection): by default the selected node keeps its
+  // place on screen and it, and any node just created, are kept in view.
+  // The tween then eases cards, links and this adjusted view in step.
+  const settled = useRef<{ layout: CanvasLayout; graph: SceneGraph; adventureId: string | null }>(
+    { layout, graph, adventureId },
+  )
+  const relayoutRequest = useRef<RelayoutRequest | null>(null)
+  useLayoutEffect(() => {
+    const before = settled.current
+    const request = relayoutRequest.current
+    settled.current = { layout, graph, adventureId }
+    relayoutRequest.current = null
+    if (before.layout === layout || before.adventureId !== adventureId) return
+
+    const selected = selectedNodeId !== null && layout.nodes.has(selectedNodeId) ? selectedNodeId : null
+    const created = [...layout.nodes.keys()].filter((id) => !before.graph.groupOf.has(id))
+    const { anchor, keepVisible } = request ?? {
+      anchor: selected !== null && before.layout.nodes.has(selected) ? { node: selected } : null,
+      keepVisible: selected === null ? created : [selected, ...created],
+    }
+    const [w, h] = viewportSize()
+    const next = anchorView(view, before.layout, layout, anchor, keepVisible, w, h)
+    if (next !== view) setView(next)
+  })
+
+  const shown = useRelayoutTween({ layout, links, view }, adventureId)
+
+  // After "Add choice", keyboard focus follows the selection to the new card
+  // (the button it was on belongs to the previous focus node and is removed).
+  const [focusCardId, setFocusCardId] = useState<string | null>(null)
+  useEffect(() => {
+    if (focusCardId === null) return
+    setFocusCardId(null)
+    const slot = [...(viewportRef.current?.querySelectorAll<HTMLElement>('[data-node-id]') ?? [])]
+      .find((el) => el.dataset.nodeId === focusCardId)
+    slot?.querySelector('button')?.focus({ preventScroll: true })
+  }, [focusCardId])
 
   // Once per adventure, once the viewport has a size: bring the start node
   // into view on the left (a tall opening scene can otherwise hide it).
@@ -106,7 +164,9 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
   })
 
   // ---- Actions --------------------------------------------------------------
+  /** Opens or closes a scene; its header stays put on screen. */
   const toggleScene = useCallback((key: SceneKey) => {
+    relayoutRequest.current = { anchor: { scene: key }, keepVisible: [] }
     setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -121,6 +181,7 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
     let next = expanded
     if (key !== undefined && !expanded.has(key)) {
       next = new Set([...expanded, key])
+      relayoutRequest.current = VIEW_ALREADY_PLACED
       setExpanded(next)
     }
     const box = layoutCanvas(graph, next).nodes.get(nodeId)
@@ -132,6 +193,20 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
     activate(nodeId)
     setSelectedNodeId(nodeId)
   }, [activate, setSelectedNodeId])
+
+  /**
+   * "Add choice" on a card: one store transaction appends a choice and the
+   * new node it leads to, which is then selected, spotlighted and focused.
+   * The source card stays still while the new node is kept in view.
+   */
+  const handleAddChoice = useCallback((nodeId: string) => {
+    const source = nodesById.get(nodeId)
+    if (source === undefined) return
+    const newId = createNodeAndLinkChoice(nodeId, source.choices.length)
+    relayoutRequest.current = { anchor: { node: nodeId }, keepVisible: [newId, nodeId] }
+    handleNodeActivate(newId)
+    setFocusCardId(newId)
+  }, [nodesById, createNodeAndLinkChoice, handleNodeActivate])
 
   /** A node was chosen from the sidebar: also bring it into view. */
   const handleNodeNavigate = useCallback((nodeId: string) => {
@@ -206,15 +281,18 @@ export function CanvasView({ onNodeActivate }: CanvasViewProps) {
         >
           <FlowGraph
             graph={graph}
-            layout={layout}
-            links={links}
+            layout={shown.layout}
+            links={shown.links}
             nodesById={nodesById}
             classifierCache={classifierCache}
-            view={view}
+            view={shown.view}
             focusNodeId={focusNodeId}
             spotlightNodeIds={spotlightNodeIds}
             onNodeActivate={handleNodeActivate}
             onToggleScene={toggleScene}
+            onAddChoice={handleAddChoice}
+            entering={shown.entering}
+            enterOpacity={shown.enterOpacity}
           />
         </div>
 

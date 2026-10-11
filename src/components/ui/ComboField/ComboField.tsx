@@ -88,7 +88,16 @@ export function ComboField({
   }
 
   return (
-    <div className={styles.field} ref={containerRef}>
+    <div
+      className={styles.field}
+      ref={containerRef}
+      onBlur={(e) => {
+        // Focus left the field (Tab, or a click into another field): close the list.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        setOpen(false)
+        setActiveIndex(-1)
+      }}
+    >
       <label className={styles.label} htmlFor={inputId}>
         {label}
       </label>

@@ -42,9 +42,9 @@ export function useNodeEditor() {
     addChoice(node.id, { choiceText: '', choiceResponseConstraint: '', nextNode: '' })
   }, [node, addChoice])
 
-  const handleCreateAndLink = useCallback((choiceIndex: number) => {
+  const handleCreateAndLink = useCallback((choiceIndex: number, title?: string) => {
     if (node == null) return
-    createNodeAndLinkChoice(node.id, choiceIndex)
+    createNodeAndLinkChoice(node.id, choiceIndex, title)
   }, [node, createNodeAndLinkChoice])
 
   const handleDeleteNode = useCallback(() => {

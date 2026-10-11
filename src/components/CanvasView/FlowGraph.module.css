@@ -120,6 +120,47 @@
   overflow: hidden;
 }
 
+/* Re-layout animation (OPS-583): items new to the layout fade in while the
+   rest move.  The opacity is driven per frame, so it must not transition. */
+.scene[data-entering],
+.nodeSlot[data-entering] {
+  opacity: var(--enter);
+}
+
+/* "Add choice" on the focused card: a round button over its top-right
+   corner, raised above the link layer so links never cover it. */
+.addChoice {
+  position: absolute;
+  z-index: 1;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #1d4ed8;
+  border-radius: 50%;
+  background: #fff;
+  color: #1d4ed8;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.addChoice:hover {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.addChoice:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
 /* ---- Links ------------------------------------------------------------- */
 
 /* Drawn above the scene backgrounds; links never cross a node card, and the

@@ -174,6 +174,75 @@
   background: #e2e8f0;
 }
 
+/* "New node title" box + create button under each choice's Next node picker */
+.newNodeField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.newNodeLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.newNodeInputRow {
+  display: flex;
+  gap: 6px;
+}
+
+.newNodeInput {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  font-family: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  box-sizing: border-box;
+}
+
+.newNodeInput::placeholder {
+  color: #64748b;
+}
+
+.newNodeInput:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.newNodeButton {
+  flex-shrink: 0;
+  width: 32px;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.newNodeButton:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.newNodeButton:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.newNodeButton:disabled {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 /* Choice row */
 .choiceRow {
   border: 1px solid #e2e8f0;

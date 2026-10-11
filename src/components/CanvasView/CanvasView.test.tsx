@@ -1,12 +1,16 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, within, act } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react'
 import { axe } from 'jest-axe'
 import { CanvasView, initialExpanded } from './CanvasView'
 import { AdventureStoreProvider } from '../../store/StoreContext'
 import { createAdventureStore } from '../../store/adventureStore'
 import { InMemoryRepository } from '../../repository/InMemoryRepository'
-import type { AdventureNode } from '../../types/adventure'
+import type { Adventure, AdventureNode } from '../../types/adventure'
+import { getValidationErrors } from '../../validation/validator'
+import { deriveIssues } from '../IssuesPanel/deriveIssues'
 import { buildSceneGraph, PREAMBLE_KEY, sceneKey } from './sceneGraph'
+import { layoutCanvas } from './sceneLayout'
+import { routeLinks, segmentHitsBox } from './linkRouting'
 
 // jsdom has no PointerEvent, so fireEvent.pointer* would build plain Events
 // without `button` / `clientX`.  A MouseEvent subclass carries both.
@@ -349,6 +353,27 @@ describe('CanvasView — pan and zoom', () => {
     expect(zoomLevel()).toHaveTextContent('100%')
   })
 
+  it('turns a native scroll of the viewport (focusing an off-screen card) into pan', async () => {
+    const { container } = await setup()
+    const region = graphRegion()
+    // jsdom does not scroll; give the viewport writable scroll offsets.
+    let left = 120
+    let top = 30
+    Object.defineProperty(region, 'scrollLeft', { get: () => left, set: (v: number) => { left = v }, configurable: true })
+    Object.defineProperty(region, 'scrollTop', { get: () => top, set: (v: number) => { top = v }, configurable: true })
+    act(() => {
+      region.dispatchEvent(new Event('scroll'))
+    })
+    expect([left, top]).toEqual([0, 0])
+    expect(world(container).style.getPropertyValue('--pan-x')).toBe(`${16 - 120}px`)
+    expect(world(container).style.getPropertyValue('--pan-y')).toBe(`${16 - 30}px`)
+    // A scroll event with nothing to absorb changes nothing.
+    act(() => {
+      region.dispatchEvent(new Event('scroll'))
+    })
+    expect(world(container).style.getPropertyValue('--pan-x')).toBe(`${16 - 120}px`)
+  })
+
   it('zooms with the mouse wheel without scrolling the page', async () => {
     await setup()
     const wheel = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true })
@@ -389,6 +414,188 @@ describe('CanvasView — pan and zoom', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Authoring from the canvas, re-layout and anchoring (OPS-583)
+// ---------------------------------------------------------------------------
+
+/** Makes the user prefer reduced motion, so re-layouts apply at once. */
+function preferReducedMotion() {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  })
+}
+
+/** Gives every element a `w` × `h` box (jsdom has no layout). */
+function measureViewport(w: number, h: number) {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(w)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(h)
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  Reflect.deleteProperty(window, 'matchMedia')
+})
+
+const cssPx = (el: Element, name: string) => parseFloat((el as HTMLElement).style.getPropertyValue(name))
+
+/** Screen position (zoom 100%) of the card whose accessible name starts `name`. */
+function cardOnScreen(name: string) {
+  const slot = screen.getByRole('button', { name: new RegExp(`^${name} \\(`) }).parentElement!
+  const sceneEl = slot.closest('section')!
+  const world = graphRegion().firstElementChild!
+  return {
+    x: cssPx(world, '--pan-x') + cssPx(sceneEl, '--x') + cssPx(slot, '--x'),
+    y: cssPx(world, '--pan-y') + cssPx(sceneEl, '--y') + cssPx(slot, '--y'),
+  }
+}
+
+const addChoiceButton = () => screen.queryByRole('button', { name: /^Add choice to / })
+
+/** Every card of `doc` with all scenes expanded, and every routed link. */
+function fullLayout(doc: Adventure) {
+  const graph = buildSceneGraph(doc)
+  const layout = layoutCanvas(graph, new Set(graph.groups.map((g) => g.key)))
+  return { layout, links: routeLinks(graph, layout) }
+}
+
+describe('CanvasView — Add choice from the canvas', () => {
+  it('is offered only on the spotlighted card', async () => {
+    await setup()
+    expect(addChoiceButton()).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    expect(addChoiceButton()).toHaveAccessibleName('Add choice to Node start1')
+  })
+
+  it('is not offered on terminal nodes', async () => {
+    await setup([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('e')] }),
+      makeNode('e', { node_type: 'end' }),
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /Node e \(end\)/ }))
+    expect(addChoiceButton()).toBeNull()
+  })
+
+  it('adds a choice and its linked node in one step, then selects, spotlights and focuses it', async () => {
+    const { store } = await setup([makeNode('s', { node_type: 'start' })])
+    fireEvent.click(screen.getByRole('button', { name: /Node s \(start\)/ }))
+    fireEvent.click(addChoiceButton()!)
+
+    const { document, classifierCache, selectedNodeId } = store.getState()
+    expect(document).toHaveLength(2)
+    const newId = document[0]!.choices[0]!.nextNode
+    expect(document[1]!.id).toBe(newId)
+    expect(selectedNodeId).toBe(newId)
+    expect(getValidationErrors(document)).toEqual([])
+    expect(deriveIssues(document, classifierCache).map((i) => i.kind)).not.toContain('dangling-reference')
+
+    expect(screen.getByRole('heading', { level: 2, name: 'New node' })).toBeTruthy()
+    const newCard = screen.getByRole('button', { name: /^New node \(decision\)/ })
+    expect(newCard).toHaveAttribute('data-spotlight', 'focus')
+    await waitFor(() => expect(newCard).toHaveFocus())
+    expect(addChoiceButton()).toHaveAccessibleName('Add choice to New node')
+  })
+
+  it('OPS-577 AC 2–3: the first new node is to the right, the second below it, all connected', async () => {
+    const { store, container } = await setup([makeNode('s', { node_type: 'start' })])
+    const source = () => screen.getByRole('button', { name: /Node s \(start\)/ })
+    fireEvent.click(source())
+    fireEvent.click(addChoiceButton()!)
+    fireEvent.click(source())
+    fireEvent.click(addChoiceButton()!)
+
+    const { document } = store.getState()
+    expect(getValidationErrors(document)).toEqual([])
+    const [first, second] = document[0]!.choices.map((c) => c.nextNode)
+    const { layout, links } = fullLayout(document)
+    const s = layout.nodes.get('s')!
+    const a = layout.nodes.get(first!)!
+    const b = layout.nodes.get(second!)!
+    expect(a.x).toBeGreaterThan(s.x + s.width)
+    expect(b.x).toBe(a.x)
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height)
+    expect(links.filter((l) => l.from === 's').map((l) => l.to)).toEqual([first, second])
+    // Both connections are drawn on the canvas too.
+    expect(linkPaths(container).filter((p) => p.getAttribute('data-link-style') === 'tree')).toHaveLength(2)
+  })
+
+  it('OPS-577 AC 4: linking to an existing node draws a connection clear of every other card', async () => {
+    const { store, container } = await setup([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('a'), makeChoice('b'), makeChoice('c')] }),
+      makeNode('a', { node_type: 'decision' }),
+      makeNode('b', { node_type: 'decision' }),
+      makeNode('c', { node_type: 'decision' }),
+    ])
+    expect(linkPaths(container)).toHaveLength(3)
+
+    // What the CompanionPanel node picker does for a new choice.
+    act(() => store.getState().addChoice('c', makeChoice('a', 'Back to a')))
+
+    expect(linkPaths(container)).toHaveLength(4)
+    const { layout, links } = fullLayout(store.getState().document)
+    const link = links.find((l) => l.from === 'c' && l.to === 'a')!
+    for (const [id, card] of layout.nodes) {
+      if (id === 'a' || id === 'c') continue
+      link.points.slice(1).forEach((p, i) => {
+        expect(segmentHitsBox(link.points[i]!, p, card)).toBe(false)
+      })
+    }
+  })
+})
+
+describe('CanvasView — viewport anchoring', () => {
+  it('keeps the selected node still on screen when an edit moves it', async () => {
+    preferReducedMotion()
+    measureViewport(1000, 800)
+    const { store } = await setup([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('a'), makeChoice('b')] }),
+      makeNode('a', { node_type: 'decision' }),
+      makeNode('b', { node_type: 'decision' }),
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /Node b \(decision\)/ }))
+    const before = cardOnScreen('Node b')
+
+    // Two new children under a push b down the canvas.
+    act(() => {
+      store.getState().createNodeAndLinkChoice('a', 0)
+      store.getState().createNodeAndLinkChoice('a', 1)
+    })
+
+    const { layout } = fullLayout(store.getState().document)
+    expect(layout.nodes.get('b')!.y).toBeGreaterThan(fullLayout([
+      makeNode('s', { node_type: 'start', choices: [makeChoice('a'), makeChoice('b')] }),
+      makeNode('a'),
+      makeNode('b'),
+    ]).layout.nodes.get('b')!.y)
+    expect(cardOnScreen('Node b')).toEqual(before)
+  })
+
+  it('pans just enough to keep a node created off-screen in view', async () => {
+    preferReducedMotion()
+    measureViewport(400, 300)
+    await setup([makeNode('s', { node_type: 'start' })])
+    fireEvent.click(screen.getByRole('button', { name: /Node s \(start\)/ }))
+    fireEvent.click(addChoiceButton()!)
+
+    const card = cardOnScreen('New node')
+    expect(card.x + 160).toBe(400 - 24)
+    expect(card.y).toBeGreaterThanOrEqual(24)
+  })
+
+  it('animates the new node in, then settles', async () => {
+    await setup([makeNode('s', { node_type: 'start' })])
+    fireEvent.click(screen.getByRole('button', { name: /Node s \(start\)/ }))
+    fireEvent.click(addChoiceButton()!)
+    const slot = () => screen.getByRole('button', { name: /^New node \(decision\)/ }).parentElement!
+    expect(slot()).toHaveAttribute('data-entering')
+    await waitFor(() => expect(slot()).not.toHaveAttribute('data-entering'))
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Accessibility audit
 // ---------------------------------------------------------------------------
 
@@ -407,6 +614,13 @@ describe('CanvasView — axe-core', () => {
     const { container } = await setup()
     fireEvent.click(screen.getByRole('button', { name: 'Expand all scenes' }))
     fireEvent.click(screen.getByRole('button', { name: /Node node1 \(narrative\)/ }))
+    expect(await axe(container)).toHaveNoViolations()
+  })
+
+  it('has no violations while the "Add choice" button is shown', async () => {
+    const { container } = await setup()
+    fireEvent.click(screen.getByRole('button', { name: /Node start1 \(start\)/ }))
+    expect(addChoiceButton()).not.toBeNull()
     expect(await axe(container)).toHaveNoViolations()
   })
 })

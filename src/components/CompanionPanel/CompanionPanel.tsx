@@ -226,7 +226,7 @@ export function CompanionPanel() {
                       allNodes={allNodes}
                       onUpdate={(patch) => updateChoice(node.id, i, patch)}
                       onDelete={() => deleteChoice(node.id, i)}
-                      onCreateAndLink={() => handleCreateAndLink(i)}
+                      onCreateAndLink={(title) => handleCreateAndLink(i, title)}
                     />
                   ))
                 )}

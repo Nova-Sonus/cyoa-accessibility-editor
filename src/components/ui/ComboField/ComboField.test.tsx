@@ -12,6 +12,22 @@ describe('ComboField', () => {
     expect(screen.getByLabelText('Sound')).toBeInTheDocument()
   })
 
+  it('closes the suggestion list when Tab moves focus away', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <ComboField label="Sound" value="" onChange={() => {}} suggestions={suggestions} />
+        <input aria-label="Next field" />
+      </>,
+    )
+    const input = screen.getByRole('combobox')
+    await user.click(input)
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+    await user.tab()
+    expect(screen.getByLabelText('Next field')).toHaveFocus()
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+  })
+
   it('input has role="combobox"', () => {
     render(<ComboField label="Sound" value="" onChange={() => {}} suggestions={suggestions} />)
     expect(screen.getByRole('combobox')).toBeInTheDocument()
